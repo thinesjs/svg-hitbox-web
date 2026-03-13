@@ -438,11 +438,12 @@ export default function App() {
     <div className="flex h-screen overflow-hidden">
       <HitboxSidebar
         hitboxes={hitboxes}
-        selectedId={selectedIds[0] ?? null}
+        selectedIds={selectedIds}
         svgFilename={svgData.filename}
         toolMode={toolMode}
         drawShape={drawShape}
         onSelect={handleSelect}
+        onToggleSelect={handleToggleSelect}
         onDelete={handleDeleteSingle}
         onLoadSvg={handleLoadSvg}
         onImport={handleImportJSON}
