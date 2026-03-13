@@ -76,7 +76,7 @@ export default function App() {
   // Load persisted state from localStorage on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("hitbox-labeller-state");
+      const saved = localStorage.getItem("svg-hitbox-state");
       if (!saved) return;
       const data = JSON.parse(saved);
       if (data.svgData) setSvgData(data.svgData);
@@ -94,7 +94,7 @@ export default function App() {
     if (!svgData) return;
     const timeout = setTimeout(() => {
       try {
-        localStorage.setItem("hitbox-labeller-state", JSON.stringify({ svgData, hitboxes }));
+        localStorage.setItem("svg-hitbox-state", JSON.stringify({ svgData, hitboxes }));
       } catch {
         // localStorage full or unavailable
       }
@@ -498,7 +498,7 @@ export default function App() {
   if (!svgData) {
     return (
       <div className="flex items-center justify-center h-screen flex-col gap-4">
-        <h1 className="text-xl font-bold">Hitbox Labeller</h1>
+        <h1 className="text-xl font-bold">SvgHitbox</h1>
         <p className="text-sm text-muted-foreground">Load an SVG to start drawing hitboxes</p>
         <div className="flex gap-2">
           <Button onClick={handleLoadSvg}>Load SVG</Button>

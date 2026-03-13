@@ -58,7 +58,7 @@ export default function HitboxSidebar({
       <div className="w-[280px] bg-sidebar border-r border-border flex flex-col overflow-hidden shrink-0">
         {/* Header */}
         <div className="px-4 pt-4 pb-3">
-          <h1 className="text-base font-bold tracking-tight mb-1">Hitbox Labeller</h1>
+          <h1 className="text-base font-bold tracking-tight mb-1">SvgHitbox</h1>
           <p className="text-xs text-muted-foreground">{svgFilename || "No SVG loaded"}</p>
         </div>
 
