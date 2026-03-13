@@ -101,9 +101,7 @@ export default function HitboxContextMenu({
           <>
             <ContextMenuSeparator />
             {anyUnlocked && (
-              <ContextMenuItem onSelect={onLock}>
-                {isMulti ? "Lock All" : "Lock"}
-              </ContextMenuItem>
+              <ContextMenuItem onSelect={onLock}>{isMulti ? "Lock All" : "Lock"}</ContextMenuItem>
             )}
             {anyLocked && (
               <ContextMenuItem onSelect={onUnlock}>

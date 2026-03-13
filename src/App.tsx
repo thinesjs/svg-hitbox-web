@@ -7,9 +7,14 @@ import HitboxEditor from "./HitboxEditor";
 import HitboxContextMenu from "./HitboxContextMenu";
 import { Button } from "@/components/ui/button";
 import {
-  bringToFront, bringForward, sendBackward, sendToBack,
-  flipHorizontal, flipVertical,
-  getHitboxAtPoint, selectionBounds,
+  bringToFront,
+  bringForward,
+  sendBackward,
+  sendToBack,
+  flipHorizontal,
+  flipVertical,
+  getHitboxAtPoint,
+  selectionBounds,
 } from "./hitboxGeometry";
 
 function parseSvgViewBox(svgText: string): { x: number; y: number; width: number; height: number } {
@@ -30,16 +35,23 @@ function parseSvgViewBox(svgText: string): { x: number; y: number; width: number
 function migrateHitbox(h: unknown): Hitbox | null {
   if (typeof h !== "object" || h === null) return null;
   const obj = h as Record<string, unknown>;
-  if (typeof obj.id !== "string" || typeof obj.fields !== "object" || obj.fields === null) return null;
+  if (typeof obj.id !== "string" || typeof obj.fields !== "object" || obj.fields === null)
+    return null;
 
   if (obj.shape === "circle") {
-    if (typeof obj.cx !== "number" || typeof obj.cy !== "number" || typeof obj.r !== "number") return null;
+    if (typeof obj.cx !== "number" || typeof obj.cy !== "number" || typeof obj.r !== "number")
+      return null;
     return obj as unknown as Hitbox;
   }
 
   // Rect — either explicit shape or legacy (no shape field)
-  if (typeof obj.x !== "number" || typeof obj.y !== "number" ||
-      typeof obj.width !== "number" || typeof obj.height !== "number") return null;
+  if (
+    typeof obj.x !== "number" ||
+    typeof obj.y !== "number" ||
+    typeof obj.width !== "number" ||
+    typeof obj.height !== "number"
+  )
+    return null;
 
   return { shape: "rect", ...obj } as unknown as Hitbox;
 }
@@ -62,7 +74,9 @@ export default function App() {
   const [clipboard, setClipboard] = useState<Hitbox[]>([]);
 
   // Ref for coordinate conversion from SvgCanvas (used by context menu)
-  const screenToSvgRef = useRef<((cx: number, cy: number) => { x: number; y: number }) | null>(null);
+  const screenToSvgRef = useRef<((cx: number, cy: number) => { x: number; y: number }) | null>(
+    null,
+  );
   const [contextSvgPoint, setContextSvgPoint] = useState<{ x: number; y: number } | null>(null);
 
   // Refs for keyboard handler (avoid stale closures without extra deps)
@@ -81,7 +95,9 @@ export default function App() {
       const data = JSON.parse(saved);
       if (data.svgData) setSvgData(data.svgData);
       if (Array.isArray(data.hitboxes)) {
-        const migrated = data.hitboxes.map(migrateHitbox).filter((h: Hitbox | null): h is Hitbox => h !== null);
+        const migrated = data.hitboxes
+          .map(migrateHitbox)
+          .filter((h: Hitbox | null): h is Hitbox => h !== null);
         setHitboxes(migrated);
       }
     } catch {
@@ -108,7 +124,10 @@ export default function App() {
       if (e.ctrlKey || e.metaKey) e.preventDefault();
     };
     const preventKeyZoom = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0")) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0")
+      ) {
         e.preventDefault();
       }
     };
@@ -143,9 +162,7 @@ export default function App() {
   }, []);
 
   const handleHitboxUpdate = useCallback((id: string, patch: Partial<Hitbox>) => {
-    setHitboxes((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, ...patch } as Hitbox : h))
-    );
+    setHitboxes((prev) => prev.map((h) => (h.id === id ? ({ ...h, ...patch } as Hitbox) : h)));
   }, []);
 
   const handleHitboxMultiUpdate = useCallback(
@@ -154,11 +171,11 @@ export default function App() {
       setHitboxes((prev) =>
         prev.map((h) => {
           const patch = patchMap.get(h.id);
-          return patch ? { ...h, ...patch } as Hitbox : h;
-        })
+          return patch ? ({ ...h, ...patch } as Hitbox) : h;
+        }),
       );
     },
-    []
+    [],
   );
 
   const handleSetSelection = useCallback((ids: string[]) => {
@@ -170,13 +187,9 @@ export default function App() {
   const handleDeleteSelected = useCallback(() => {
     const ids = new Set(selectedIdsRef.current);
     const lockedInSelection = new Set(
-      hitboxesRef.current
-        .filter((h) => ids.has(h.id) && h.locked)
-        .map((h) => h.id)
+      hitboxesRef.current.filter((h) => ids.has(h.id) && h.locked).map((h) => h.id),
     );
-    setHitboxes((prev) => prev.filter((h) =>
-      !ids.has(h.id) || lockedInSelection.has(h.id)
-    ));
+    setHitboxes((prev) => prev.filter((h) => !ids.has(h.id) || lockedInSelection.has(h.id)));
     setSelectedIds((prev) => prev.filter((id) => lockedInSelection.has(id)));
   }, []);
 
@@ -198,7 +211,7 @@ export default function App() {
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id],
     );
   }, []);
 
@@ -224,16 +237,12 @@ export default function App() {
 
   const handleLock = useCallback(() => {
     const ids = new Set(selectedIdsRef.current);
-    setHitboxes((prev) =>
-      prev.map((h) => ids.has(h.id) ? { ...h, locked: true } : h)
-    );
+    setHitboxes((prev) => prev.map((h) => (ids.has(h.id) ? { ...h, locked: true } : h)));
   }, []);
 
   const handleUnlock = useCallback(() => {
     const ids = new Set(selectedIdsRef.current);
-    setHitboxes((prev) =>
-      prev.map((h) => ids.has(h.id) ? { ...h, locked: false } : h)
-    );
+    setHitboxes((prev) => prev.map((h) => (ids.has(h.id) ? { ...h, locked: false } : h)));
   }, []);
 
   // --- Flip handlers ---
@@ -262,7 +271,10 @@ export default function App() {
     let newHbs: Hitbox[];
     if (cursorSvgPoint) {
       // Context menu paste: center clipboard group at cursor position
-      const bounds = selectionBounds(cb, cb.map((h) => h.id));
+      const bounds = selectionBounds(
+        cb,
+        cb.map((h) => h.id),
+      );
       const cx = bounds.x + bounds.width / 2;
       const cy = bounds.y + bounds.height / 2;
       const offsetX = cursorSvgPoint.x - cx;
@@ -270,18 +282,46 @@ export default function App() {
       newHbs = cb.map((h) => {
         const newId = crypto.randomUUID();
         if (h.shape === "circle") {
-          return { ...h, id: newId, cx: h.cx + offsetX, cy: h.cy + offsetY, locked: false, fields: { ...h.fields } };
+          return {
+            ...h,
+            id: newId,
+            cx: h.cx + offsetX,
+            cy: h.cy + offsetY,
+            locked: false,
+            fields: { ...h.fields },
+          };
         }
-        return { ...h, id: newId, x: h.x + offsetX, y: h.y + offsetY, locked: false, fields: { ...h.fields } };
+        return {
+          ...h,
+          id: newId,
+          x: h.x + offsetX,
+          y: h.y + offsetY,
+          locked: false,
+          fields: { ...h.fields },
+        };
       });
     } else {
       // Keyboard paste: +20 offset from original positions
       newHbs = cb.map((h) => {
         const newId = crypto.randomUUID();
         if (h.shape === "circle") {
-          return { ...h, id: newId, cx: h.cx + 20, cy: h.cy + 20, locked: false, fields: { ...h.fields } };
+          return {
+            ...h,
+            id: newId,
+            cx: h.cx + 20,
+            cy: h.cy + 20,
+            locked: false,
+            fields: { ...h.fields },
+          };
         }
-        return { ...h, id: newId, x: h.x + 20, y: h.y + 20, locked: false, fields: { ...h.fields } };
+        return {
+          ...h,
+          id: newId,
+          x: h.x + 20,
+          y: h.y + 20,
+          locked: false,
+          fields: { ...h.fields },
+        };
       });
     }
     setHitboxes((prev) => [...prev, ...newHbs]);
@@ -295,7 +335,14 @@ export default function App() {
     const dupes = selected.map((h) => {
       const newId = crypto.randomUUID();
       if (h.shape === "circle") {
-        return { ...h, id: newId, cx: h.cx + 20, cy: h.cy + 20, locked: false, fields: { ...h.fields } };
+        return {
+          ...h,
+          id: newId,
+          cx: h.cx + 20,
+          cy: h.cy + 20,
+          locked: false,
+          fields: { ...h.fields },
+        };
       }
       return { ...h, id: newId, x: h.x + 20, y: h.y + 20, locked: false, fields: { ...h.fields } };
     });
@@ -361,7 +408,7 @@ export default function App() {
         }
         if (svgData && data.svgFilename && data.svgFilename !== svgData.filename) {
           const proceed = confirm(
-            `This hitbox file was created for "${data.svgFilename}" but you have "${svgData.filename}" loaded. Import anyway?`
+            `This hitbox file was created for "${data.svgFilename}" but you have "${svgData.filename}" loaded. Import anyway?`,
           );
           if (!proceed) return;
         }
@@ -399,8 +446,14 @@ export default function App() {
     lines.push("");
     lines.push("export type Hitbox = RectHitbox | CircleHitbox;\n");
     lines.push(`export const svgFilename = ${JSON.stringify(svgData.filename)};\n`);
-    lines.push(`export const svgViewBox = "${svgData.viewBox.x} ${svgData.viewBox.y} ${svgData.viewBox.width} ${svgData.viewBox.height}";\n`);
-    lines.push("export const hitboxes: Hitbox[] = " + JSON.stringify(cleanHitboxesForExport(hitboxes), null, 2) + ";\n");
+    lines.push(
+      `export const svgViewBox = "${svgData.viewBox.x} ${svgData.viewBox.y} ${svgData.viewBox.width} ${svgData.viewBox.height}";\n`,
+    );
+    lines.push(
+      "export const hitboxes: Hitbox[] = " +
+        JSON.stringify(cleanHitboxesForExport(hitboxes), null, 2) +
+        ";\n",
+    );
 
     const blob = new Blob([lines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -491,9 +544,8 @@ export default function App() {
 
   // --- Render ---
 
-  const selectedHitbox = selectedIds.length === 1
-    ? hitboxes.find((h) => h.id === selectedIds[0]) ?? null
-    : null;
+  const selectedHitbox =
+    selectedIds.length === 1 ? (hitboxes.find((h) => h.id === selectedIds[0]) ?? null) : null;
 
   if (!svgData) {
     return (
@@ -502,7 +554,9 @@ export default function App() {
         <p className="text-sm text-muted-foreground">Load an SVG to start drawing hitboxes</p>
         <div className="flex gap-2">
           <Button onClick={handleLoadSvg}>Load SVG</Button>
-          <Button variant="outline" onClick={handleImportJSON}>Import JSON</Button>
+          <Button variant="outline" onClick={handleImportJSON}>
+            Import JSON
+          </Button>
         </div>
       </div>
     );

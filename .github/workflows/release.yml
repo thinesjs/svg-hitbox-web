@@ -16,7 +16,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   release:
@@ -26,11 +25,6 @@ jobs:
       group: ${{ github.workflow }}-release
       cancel-in-progress: false
 
-    outputs:
-      released: ${{ steps.check-release.outputs.released }}
-      version: ${{ steps.extract-version.outputs.version }}
-      tag: ${{ steps.extract-version.outputs.tag }}
-
     steps:
       - name: Check if branch is master
         if: github.ref != 'refs/heads/master'
@@ -39,39 +33,20 @@ jobs:
           exit 1
 
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # v3
-        with:
-          version: 10.15.1
-          run_install: false
+      - uses: pnpm/action-setup@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
           cache: "pnpm"
 
-      - name: Cache global node modules
-        id: cache-node-modules
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        env:
-          cache-name: cache-node-modules
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('pnpm-lock.yaml') }}
-
       - name: Install dependencies
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
-        with:
-          timeout_minutes: 10
-          max_attempts: 2
-          retry_wait_seconds: 5
-          command: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Configure Git
         run: |
@@ -89,7 +64,6 @@ jobs:
       - name: Check if release was created
         id: check-release
         run: |
-          # Check if there are new commits/tags created
           if git diff --quiet HEAD@{1} HEAD 2>/dev/null; then
             echo "released=false" >> $GITHUB_OUTPUT
             echo "No changes to release"
@@ -123,7 +97,8 @@ jobs:
           git push origin develop
 
       - name: Create Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        if: steps.check-release.outputs.released == 'true'
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.extract-version.outputs.tag }}
           name: ${{ steps.extract-version.outputs.tag }}
@@ -132,15 +107,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  deploy-image:
-    needs: release
-    if: needs.release.outputs.released == 'true'
-    uses: ./.github/workflows/deploy.yml
-    with:
-      ref: ${{ needs.release.outputs.tag }}
-      version: ${{ needs.release.outputs.version }}
-      environment: production
-      build_env: prod
-    secrets:
-      ENV: ${{ secrets.ENV }}

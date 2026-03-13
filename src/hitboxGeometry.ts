@@ -1,4 +1,12 @@
-import type { Hitbox, RectHitbox, CircleHitbox, BBox, HandlePosition, HandleInfo, ViewBox } from "./types";
+import type {
+  Hitbox,
+  RectHitbox,
+  CircleHitbox,
+  BBox,
+  HandlePosition,
+  HandleInfo,
+  ViewBox,
+} from "./types";
 
 const MIN_SIZE = 5;
 
@@ -59,7 +67,7 @@ export function getHandleAtPoint(
   px: number,
   py: number,
   h: Hitbox,
-  scale: number
+  scale: number,
 ): HandleInfo | null {
   const hitRadius = 8 / scale; // 16px screen hit area → 8px radius in SVG
   const handles = getHandlePositions(h);
@@ -78,10 +86,10 @@ export function clampRectToViewBox(
   ry: number,
   rw: number,
   rh: number,
-  vb: ViewBox
+  vb: ViewBox,
 ): { x: number; y: number; width: number; height: number } {
-  let x = Math.max(vb.x, Math.min(rx, vb.x + vb.width - rw));
-  let y = Math.max(vb.y, Math.min(ry, vb.y + vb.height - rh));
+  const x = Math.max(vb.x, Math.min(rx, vb.x + vb.width - rw));
+  const y = Math.max(vb.y, Math.min(ry, vb.y + vb.height - rh));
   return { x, y, width: rw, height: rh };
 }
 
@@ -89,15 +97,9 @@ export function clampCircleToViewBox(
   cx: number,
   cy: number,
   r: number,
-  vb: ViewBox
+  vb: ViewBox,
 ): { cx: number; cy: number; r: number } {
-  const maxR = Math.min(
-    cx - vb.x,
-    vb.x + vb.width - cx,
-    cy - vb.y,
-    vb.y + vb.height - cy,
-    r
-  );
+  const maxR = Math.min(cx - vb.x, vb.x + vb.width - cx, cy - vb.y, vb.y + vb.height - cy, r);
   const clampedR = Math.max(MIN_SIZE, maxR);
   return {
     cx: Math.max(vb.x + clampedR, Math.min(cx, vb.x + vb.width - clampedR)),
@@ -126,14 +128,17 @@ export function resizeRect(
   handle: HandlePosition,
   dx: number,
   dy: number,
-  vb: ViewBox
+  vb: ViewBox,
 ): { x: number; y: number; width: number; height: number } {
-  let { x, y, width, height } = original;
+  const { x, y, width, height } = original;
   const right = x + width;
   const bottom = y + height;
 
   // Compute new edges based on handle
-  let newLeft = x, newTop = y, newRight = right, newBottom = bottom;
+  let newLeft = x,
+    newTop = y,
+    newRight = right,
+    newBottom = bottom;
 
   if (handle.includes("w")) newLeft = Math.min(x + dx, right - MIN_SIZE);
   if (handle.includes("e")) newRight = Math.max(right + dx, x + MIN_SIZE);
@@ -164,7 +169,7 @@ export function resizeCircle(
   handle: HandlePosition,
   dx: number,
   dy: number,
-  vb: ViewBox
+  vb: ViewBox,
 ): { cx: number; cy: number; r: number } {
   // All handles adjust radius uniformly. Compute new radius based on
   // the distance from center to the dragged handle position.
@@ -173,9 +178,7 @@ export function resizeCircle(
   const newHandleY = handlePos.svgY + dy;
   const newR = Math.max(
     MIN_SIZE,
-    Math.sqrt(
-      (newHandleX - original.cx) ** 2 + (newHandleY - original.cy) ** 2
-    )
+    Math.sqrt((newHandleX - original.cx) ** 2 + (newHandleY - original.cy) ** 2),
   );
   return clampCircleToViewBox(original.cx, original.cy, newR, vb);
 }
@@ -230,7 +233,10 @@ export function selectionBounds(hitboxes: Hitbox[], selectedIds: string[]): BBox
   const sel = new Set(selectedIds);
   const selected = hitboxes.filter((h) => sel.has(h.id));
   if (selected.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const h of selected) {
     const b = hitboxBounds(h);
     minX = Math.min(minX, b.x);
@@ -282,10 +288,7 @@ export function flipVertical(hitboxes: Hitbox[], selectedIds: string[], vb: View
 // --- Marquee selection ---
 
 /** Returns IDs of hitboxes whose bounding box intersects the given rect (in SVG coords). */
-export function hitboxesInMarquee(
-  hitboxes: Hitbox[],
-  marquee: BBox
-): string[] {
+export function hitboxesInMarquee(hitboxes: Hitbox[], marquee: BBox): string[] {
   return hitboxes
     .filter((h) => {
       const b = hitboxBounds(h);

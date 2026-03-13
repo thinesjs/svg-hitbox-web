@@ -1,12 +1,7 @@
 import { useEffect, useMemo } from "react";
 import type { SvgData, Hitbox, ToolMode, DrawShape } from "./types";
 import { Button } from "@/components/ui/button";
-import {
-  hitboxBounds,
-  getHandlePositions,
-  hitboxLabel,
-  selectionBounds,
-} from "./hitboxGeometry";
+import { hitboxBounds, getHandlePositions, hitboxLabel, selectionBounds } from "./hitboxGeometry";
 import { useCanvasInteractions } from "./useCanvasInteractions";
 
 interface SvgCanvasProps {
@@ -22,7 +17,9 @@ interface SvgCanvasProps {
   onToggleSelect: (id: string) => void;
   onSetSelection: (ids: string[]) => void;
   onDeselect: () => void;
-  screenToSvgRef?: React.MutableRefObject<((cx: number, cy: number) => { x: number; y: number }) | null>;
+  screenToSvgRef?: React.MutableRefObject<
+    ((cx: number, cy: number) => { x: number; y: number }) | null
+  >;
 }
 
 export default function SvgCanvas({
@@ -92,9 +89,8 @@ export default function SvgCanvas({
   }, [svgData, svgContainerRef]);
 
   // Derived state
-  const singleSelectedHitbox = selectedIds.length === 1
-    ? hitboxes.find((h) => h.id === selectedIds[0]) ?? null
-    : null;
+  const singleSelectedHitbox =
+    selectedIds.length === 1 ? (hitboxes.find((h) => h.id === selectedIds[0]) ?? null) : null;
 
   return (
     <div
@@ -112,13 +108,18 @@ export default function SvgCanvas({
           variant="outline"
           size="icon"
           className="w-7 h-7"
-          onClick={() => setTransform((t) => {
-            const newScale = Math.min(t.scale * 1.3, 20);
-            const ratio = newScale / t.scale;
-            const cx = containerSize.w / 2, cy = containerSize.h / 2;
-            return { scale: newScale, x: cx - (cx - t.x) * ratio, y: cy - (cy - t.y) * ratio };
-          })}
-        >+</Button>
+          onClick={() =>
+            setTransform((t) => {
+              const newScale = Math.min(t.scale * 1.3, 20);
+              const ratio = newScale / t.scale;
+              const cx = containerSize.w / 2,
+                cy = containerSize.h / 2;
+              return { scale: newScale, x: cx - (cx - t.x) * ratio, y: cy - (cy - t.y) * ratio };
+            })
+          }
+        >
+          +
+        </Button>
         <span className="text-xs text-muted-foreground min-w-[40px] text-center font-mono">
           {Math.round(transform.scale * 100)}%
         </span>
@@ -126,13 +127,18 @@ export default function SvgCanvas({
           variant="outline"
           size="icon"
           className="w-7 h-7"
-          onClick={() => setTransform((t) => {
-            const newScale = Math.max(t.scale / 1.3, 0.1);
-            const ratio = newScale / t.scale;
-            const cx = containerSize.w / 2, cy = containerSize.h / 2;
-            return { scale: newScale, x: cx - (cx - t.x) * ratio, y: cy - (cy - t.y) * ratio };
-          })}
-        >−</Button>
+          onClick={() =>
+            setTransform((t) => {
+              const newScale = Math.max(t.scale / 1.3, 0.1);
+              const ratio = newScale / t.scale;
+              const cx = containerSize.w / 2,
+                cy = containerSize.h / 2;
+              return { scale: newScale, x: cx - (cx - t.x) * ratio, y: cy - (cy - t.y) * ratio };
+            })
+          }
+        >
+          −
+        </Button>
       </div>
 
       {/* SVG background layer */}
@@ -172,121 +178,151 @@ export default function SvgCanvas({
             <g key={hb.id}>
               {hb.shape === "rect" ? (
                 <rect
-                  x={hb.x} y={hb.y} width={hb.width} height={hb.height}
+                  x={hb.x}
+                  y={hb.y}
+                  width={hb.width}
+                  height={hb.height}
                   fill={isSelected ? "rgba(88, 166, 255, 0.25)" : "rgba(88, 166, 255, 0.12)"}
                   stroke={isSelected ? "#58a6ff" : "#58a6ff80"}
                   strokeWidth={isSelected ? 2 / scale : 1 / scale}
                 />
               ) : (
                 <circle
-                  cx={hb.cx} cy={hb.cy} r={hb.r}
+                  cx={hb.cx}
+                  cy={hb.cy}
+                  r={hb.r}
                   fill={isSelected ? "rgba(88, 166, 255, 0.25)" : "rgba(88, 166, 255, 0.12)"}
                   stroke={isSelected ? "#58a6ff" : "#58a6ff80"}
                   strokeWidth={isSelected ? 2 / scale : 1 / scale}
                 />
               )}
-              {label && scale > 0.5 && (() => {
-                const bounds = hitboxBounds(hb);
-                return (
-                  <text
-                    x={bounds.x + bounds.width / 2}
-                    y={bounds.y + bounds.height / 2}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fontSize={10 / scale}
-                    fill="#58a6ff"
-                    style={{ pointerEvents: "none", fontWeight: 600 }}
-                  >
-                    {label}
-                  </text>
-                );
-              })()}
+              {label &&
+                scale > 0.5 &&
+                (() => {
+                  const bounds = hitboxBounds(hb);
+                  return (
+                    <text
+                      x={bounds.x + bounds.width / 2}
+                      y={bounds.y + bounds.height / 2}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fontSize={10 / scale}
+                      fill="#58a6ff"
+                      style={{ pointerEvents: "none", fontWeight: 600 }}
+                    >
+                      {label}
+                    </text>
+                  );
+                })()}
             </g>
           );
         })}
 
         {/* Resize handles for single selected hitbox (not locked) */}
-        {selectedIds.length === 1 && singleSelectedHitbox && !singleSelectedHitbox.locked && toolMode === "select" && (
-          <g>
-            {getHandlePositions(singleSelectedHitbox).map((handle) => {
-              const handleSize = 10 / scale;
-              return (
-                <rect
-                  key={handle.position}
-                  x={handle.svgX - handleSize / 2}
-                  y={handle.svgY - handleSize / 2}
-                  width={handleSize}
-                  height={handleSize}
-                  fill="white"
-                  stroke="#3b82f6"
-                  strokeWidth={2 / scale}
-                />
-              );
-            })}
-          </g>
-        )}
+        {selectedIds.length === 1 &&
+          singleSelectedHitbox &&
+          !singleSelectedHitbox.locked &&
+          toolMode === "select" && (
+            <g>
+              {getHandlePositions(singleSelectedHitbox).map((handle) => {
+                const handleSize = 10 / scale;
+                return (
+                  <rect
+                    key={handle.position}
+                    x={handle.svgX - handleSize / 2}
+                    y={handle.svgY - handleSize / 2}
+                    width={handleSize}
+                    height={handleSize}
+                    fill="white"
+                    stroke="#3b82f6"
+                    strokeWidth={2 / scale}
+                  />
+                );
+              })}
+            </g>
+          )}
 
         {/* Group bounding box for multi-selection */}
-        {selectedIds.length > 1 && (() => {
-          const bounds = selectionBounds(hitboxes, selectedIds);
-          if (bounds.width === 0 && bounds.height === 0) return null;
-          return (
-            <rect
-              x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height}
-              fill="none" stroke="#58a6ff" strokeWidth={1 / scale}
-              strokeDasharray={`${4 / scale} ${3 / scale}`}
-            />
-          );
-        })()}
-
-        {/* Lock icon for locked hitboxes */}
-        {hitboxes.filter((h) => h.locked).map((hb) => {
-          const b = hitboxBounds(hb);
-          const iconSize = 12 / scale;
-          const ix = b.x + b.width - iconSize * 0.2;
-          const iy = b.y - iconSize * 0.8;
-          return (
-            <g key={`lock-${hb.id}`} transform={`translate(${ix}, ${iy}) scale(${iconSize / 16})`}>
-              <path d="M6 8V6a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h1z" fill="#58a6ff" />
-              <path d="M8 6v2h4V6a2 2 0 1 0-4 0z" fill="#1a1a2e" />
-            </g>
-          );
-        })}
-
-        {/* Draw preview */}
-        {drawPreview && (() => {
-          const { shape, startSvg, currentSvg } = drawPreview;
-          if (shape === "rect") {
-            const x = Math.min(startSvg.x, currentSvg.x);
-            const y = Math.min(startSvg.y, currentSvg.y);
-            const w = Math.abs(currentSvg.x - startSvg.x);
-            const h = Math.abs(currentSvg.y - startSvg.y);
-            if (w < 1 && h < 1) return null;
+        {selectedIds.length > 1 &&
+          (() => {
+            const bounds = selectionBounds(hitboxes, selectedIds);
+            if (bounds.width === 0 && bounds.height === 0) return null;
             return (
               <rect
-                x={x} y={y} width={w} height={h}
-                fill="rgba(88, 166, 255, 0.15)"
+                x={bounds.x}
+                y={bounds.y}
+                width={bounds.width}
+                height={bounds.height}
+                fill="none"
                 stroke="#58a6ff"
-                strokeWidth={1.5 / scale}
+                strokeWidth={1 / scale}
                 strokeDasharray={`${4 / scale} ${3 / scale}`}
               />
             );
-          } else {
-            const dx = currentSvg.x - startSvg.x;
-            const dy = currentSvg.y - startSvg.y;
-            const r = Math.sqrt(dx * dx + dy * dy);
-            if (r < 1) return null;
+          })()}
+
+        {/* Lock icon for locked hitboxes */}
+        {hitboxes
+          .filter((h) => h.locked)
+          .map((hb) => {
+            const b = hitboxBounds(hb);
+            const iconSize = 12 / scale;
+            const ix = b.x + b.width - iconSize * 0.2;
+            const iy = b.y - iconSize * 0.8;
             return (
-              <circle
-                cx={startSvg.x} cy={startSvg.y} r={r}
-                fill="rgba(88, 166, 255, 0.15)"
-                stroke="#58a6ff"
-                strokeWidth={1.5 / scale}
-                strokeDasharray={`${4 / scale} ${3 / scale}`}
-              />
+              <g
+                key={`lock-${hb.id}`}
+                transform={`translate(${ix}, ${iy}) scale(${iconSize / 16})`}
+              >
+                <path
+                  d="M6 8V6a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h1z"
+                  fill="#58a6ff"
+                />
+                <path d="M8 6v2h4V6a2 2 0 1 0-4 0z" fill="#1a1a2e" />
+              </g>
             );
-          }
-        })()}
+          })}
+
+        {/* Draw preview */}
+        {drawPreview &&
+          (() => {
+            const { shape, startSvg, currentSvg } = drawPreview;
+            if (shape === "rect") {
+              const x = Math.min(startSvg.x, currentSvg.x);
+              const y = Math.min(startSvg.y, currentSvg.y);
+              const w = Math.abs(currentSvg.x - startSvg.x);
+              const h = Math.abs(currentSvg.y - startSvg.y);
+              if (w < 1 && h < 1) return null;
+              return (
+                <rect
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={h}
+                  fill="rgba(88, 166, 255, 0.15)"
+                  stroke="#58a6ff"
+                  strokeWidth={1.5 / scale}
+                  strokeDasharray={`${4 / scale} ${3 / scale}`}
+                />
+              );
+            } else {
+              const dx = currentSvg.x - startSvg.x;
+              const dy = currentSvg.y - startSvg.y;
+              const r = Math.sqrt(dx * dx + dy * dy);
+              if (r < 1) return null;
+              return (
+                <circle
+                  cx={startSvg.x}
+                  cy={startSvg.y}
+                  r={r}
+                  fill="rgba(88, 166, 255, 0.15)"
+                  stroke="#58a6ff"
+                  strokeWidth={1.5 / scale}
+                  strokeDasharray={`${4 / scale} ${3 / scale}`}
+                />
+              );
+            }
+          })()}
       </svg>
 
       {/* Marquee selection rectangle */}

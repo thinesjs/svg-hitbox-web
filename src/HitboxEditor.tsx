@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Hitbox } from "./types";
-import { hitboxBounds } from "./hitboxGeometry";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -15,7 +14,12 @@ interface HitboxEditorProps {
 
 const BUILTIN_KEYS = ["mode", "route", "stop"];
 
-export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose }: HitboxEditorProps) {
+export default function HitboxEditor({
+  hitbox,
+  onFieldsChange,
+  onDelete,
+  onClose,
+}: HitboxEditorProps) {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [newKey, setNewKey] = useState("");
   const firstInputRef = useRef<HTMLInputElement>(null);
@@ -26,22 +30,28 @@ export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose
     setTimeout(() => firstInputRef.current?.focus(), 50);
   }, [hitbox.id]);
 
-  const updateField = useCallback((key: string, value: string) => {
-    setFields((prev) => {
-      const updated = { ...prev, [key]: value };
-      onFieldsChange(hitbox.id, updated);
-      return updated;
-    });
-  }, [hitbox.id, onFieldsChange]);
+  const updateField = useCallback(
+    (key: string, value: string) => {
+      setFields((prev) => {
+        const updated = { ...prev, [key]: value };
+        onFieldsChange(hitbox.id, updated);
+        return updated;
+      });
+    },
+    [hitbox.id, onFieldsChange],
+  );
 
-  const removeField = useCallback((key: string) => {
-    setFields((prev) => {
-      const updated = { ...prev };
-      delete updated[key];
-      onFieldsChange(hitbox.id, updated);
-      return updated;
-    });
-  }, [hitbox.id, onFieldsChange]);
+  const removeField = useCallback(
+    (key: string) => {
+      setFields((prev) => {
+        const updated = { ...prev };
+        delete updated[key];
+        onFieldsChange(hitbox.id, updated);
+        return updated;
+      });
+    },
+    [hitbox.id, onFieldsChange],
+  );
 
   const addCustomField = useCallback(() => {
     const key = newKey.trim();
@@ -58,9 +68,10 @@ export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose
   const customKeys = Object.keys(fields).filter((k) => !BUILTIN_KEYS.includes(k));
 
   // Shape-specific coordinate display
-  const coordDisplay = hitbox.shape === "circle"
-    ? `cx:${Math.round(hitbox.cx)} cy:${Math.round(hitbox.cy)} r:${Math.round(hitbox.r)}`
-    : `${Math.round(hitbox.x)},${Math.round(hitbox.y)} ${Math.round(hitbox.width)}×${Math.round(hitbox.height)}`;
+  const coordDisplay =
+    hitbox.shape === "circle"
+      ? `cx:${Math.round(hitbox.cx)} cy:${Math.round(hitbox.cy)} r:${Math.round(hitbox.r)}`
+      : `${Math.round(hitbox.x)},${Math.round(hitbox.y)} ${Math.round(hitbox.width)}×${Math.round(hitbox.height)}`;
 
   return (
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-popover border border-border rounded-xl p-4 w-[480px] max-h-[50vh] overflow-y-auto shadow-xl">
@@ -75,10 +86,21 @@ export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose
             {hitbox.id.slice(0, 8)} · {coordDisplay}
           </div>
         </div>
-        <Button variant="destructive" size="sm" className="mr-2 h-7 text-xs" onClick={() => onDelete(hitbox.id)} disabled={!!hitbox.locked}>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="mr-2 h-7 text-xs"
+          onClick={() => onDelete(hitbox.id)}
+          disabled={!!hitbox.locked}
+        >
           Delete
         </Button>
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-muted-foreground"
+          onClick={onClose}
+        >
           ×
         </Button>
       </div>
@@ -130,7 +152,12 @@ export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose
           type="text"
           value={newKey}
           onChange={(e) => setNewKey(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomField(); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustomField();
+            }
+          }}
           placeholder="New field name..."
           className="h-8 text-sm flex-1"
         />

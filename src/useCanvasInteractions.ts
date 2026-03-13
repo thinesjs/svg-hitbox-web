@@ -27,9 +27,28 @@ type InteractionState =
   | { type: "idle" }
   | { type: "panning"; startX: number; startY: number; startTx: number; startTy: number }
   | { type: "drawing"; startSvg: { x: number; y: number } }
-  | { type: "moving"; hitboxIds: string[]; startSvg: { x: number; y: number }; originals: Map<string, Hitbox>; shiftHeld: boolean; pointerStart: { x: number; y: number } }
-  | { type: "resizing"; hitboxId: string; handle: HandleInfo; startSvg: { x: number; y: number }; original: Hitbox }
-  | { type: "marquee"; startScreen: { x: number; y: number }; startSvg: { x: number; y: number }; shiftHeld: boolean; prevSelectedIds: string[] };
+  | {
+      type: "moving";
+      hitboxIds: string[];
+      startSvg: { x: number; y: number };
+      originals: Map<string, Hitbox>;
+      shiftHeld: boolean;
+      pointerStart: { x: number; y: number };
+    }
+  | {
+      type: "resizing";
+      hitboxId: string;
+      handle: HandleInfo;
+      startSvg: { x: number; y: number };
+      original: Hitbox;
+    }
+  | {
+      type: "marquee";
+      startScreen: { x: number; y: number };
+      startSvg: { x: number; y: number };
+      shiftHeld: boolean;
+      prevSelectedIds: string[];
+    };
 
 interface UseCanvasInteractionsProps {
   svgData: SvgData;
@@ -86,7 +105,12 @@ export function useCanvasInteractions({
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [cursor, setCursor] = useState("default");
   const [drawPreview, setDrawPreview] = useState<DrawPreview | null>(null);
-  const [marqueeRect, setMarqueeRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [marqueeRect, setMarqueeRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Refs to avoid stale closures in pointer handlers
   const drawPreviewRef = useRef(drawPreview);
@@ -193,326 +217,404 @@ export function useCanvasInteractions({
 
   // --- Pointer handlers ---
 
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Right-click is handled by shadcn ContextMenu — don't interfere
-    if (e.button === 2) return;
-    // Only capture left (0) and middle (1) button
-    if (e.button !== 0 && e.button !== 1) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    const svgPt = screenToSvg(e.clientX, e.clientY);
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      // Right-click is handled by shadcn ContextMenu — don't interfere
+      if (e.button === 2) return;
+      // Only capture left (0) and middle (1) button
+      if (e.button !== 0 && e.button !== 1) return;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      const svgPt = screenToSvg(e.clientX, e.clientY);
 
-    // 1. Space held → pan (any button)
-    if (spaceHeldRef.current) {
-      const t = transformRef.current;
-      interactionRef.current = { type: "panning", startX: e.clientX, startY: e.clientY, startTx: t.x, startTy: t.y };
-      setCursor("grabbing");
-      return;
-    }
-
-    // 2. Middle button → pan
-    if (e.button === 1) {
-      const t = transformRef.current;
-      interactionRef.current = { type: "panning", startX: e.clientX, startY: e.clientY, startTx: t.x, startTy: t.y };
-      setCursor("grabbing");
-      return;
-    }
-
-    // 3. Draw mode → draw
-    if (toolMode === "draw" && e.button === 0) {
-      interactionRef.current = { type: "drawing", startSvg: svgPt };
-      setDrawPreview({ shape: drawShape, startSvg: svgPt, currentSvg: svgPt });
-      setCursor("crosshair");
-      return;
-    }
-
-    // 4. Select mode
-    if (toolMode === "select") {
-      const selectedSet = new Set(selectedIdsRef.current);
-      const singleSelected = selectedIdsRef.current.length === 1
-        ? hitboxesRef.current.find((h) => h.id === selectedIdsRef.current[0]) ?? null
-        : null;
-
-      // 4a. Resize handle (single selection only, not locked)
-      if (singleSelected && !singleSelected.locked) {
-        const handle = getHandleAtPoint(svgPt.x, svgPt.y, singleSelected, transformRef.current.scale);
-        if (handle) {
-          interactionRef.current = { type: "resizing", hitboxId: singleSelected.id, handle, startSvg: svgPt, original: singleSelected };
-          setCursor(handle.cursor);
-          return;
-        }
-      }
-
-      // 4b-e. Hitbox body
-      const hit = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxesRef.current);
-      if (hit) {
-        const isInSelection = selectedSet.has(hit.id);
-
-        // 4b. Shift held → prepare for pointer-up toggle
-        if (e.shiftKey) {
-          const ids = isInSelection ? [...selectedIdsRef.current] : [...selectedIdsRef.current, hit.id];
-          const originals = new Map(hitboxesRef.current.filter((h) => ids.includes(h.id)).map((h) => [h.id, h]));
-          interactionRef.current = {
-            type: "moving", hitboxIds: ids, startSvg: svgPt, originals,
-            shiftHeld: true, pointerStart: { x: e.clientX, y: e.clientY },
-          };
-          setCursor("move");
-          return;
-        }
-
-        // 4c. Alt on hitbox → duplicate and move clones
-        if (e.altKey) {
-          const idsToClone = isInSelection ? [...selectedIdsRef.current] : [hit.id];
-          const toClone = hitboxesRef.current.filter((h) => idsToClone.includes(h.id));
-          const clones: Hitbox[] = toClone.map((h) => ({
-            ...h, id: crypto.randomUUID(), locked: false, fields: { ...h.fields },
-          }));
-          clones.forEach((c) => onHitboxDrawn(c));
-          onSetSelection(clones.map((c) => c.id));
-          interactionRef.current = {
-            type: "moving", hitboxIds: clones.map((c) => c.id), startSvg: svgPt,
-            originals: new Map(clones.map((c) => [c.id, c])), shiftHeld: false, pointerStart: { x: e.clientX, y: e.clientY },
-          };
-          setCursor("copy");
-          return;
-        }
-
-        // 4d. Hitbox in current selection → group move
-        if (isInSelection) {
-          const originalsList = hitboxesRef.current.filter((h) => selectedSet.has(h.id));
-          const allLocked = originalsList.every((h) => h.locked);
-          if (allLocked) {
-            setCursor("not-allowed");
-            setTimeout(() => setCursor("default"), 300);
-            return;
-          }
-          interactionRef.current = {
-            type: "moving", hitboxIds: [...selectedIdsRef.current], startSvg: svgPt,
-            originals: new Map(originalsList.map((h) => [h.id, h])), shiftHeld: false, pointerStart: { x: e.clientX, y: e.clientY },
-          };
-          setCursor("move");
-          return;
-        }
-
-        // 4e. Unselected hitbox → select it, begin move (unless locked)
-        onSelect(hit.id);
-        if (!hit.locked) {
-          interactionRef.current = {
-            type: "moving", hitboxIds: [hit.id], startSvg: svgPt,
-            originals: new Map([[hit.id, hit]]), shiftHeld: false, pointerStart: { x: e.clientX, y: e.clientY },
-          };
-          setCursor("move");
-        }
+      // 1. Space held → pan (any button)
+      if (spaceHeldRef.current) {
+        const t = transformRef.current;
+        interactionRef.current = {
+          type: "panning",
+          startX: e.clientX,
+          startY: e.clientY,
+          startTx: t.x,
+          startTy: t.y,
+        };
+        setCursor("grabbing");
         return;
       }
 
-      // 4f. Empty canvas → marquee
-      interactionRef.current = {
-        type: "marquee", startScreen: { x: e.clientX, y: e.clientY }, startSvg: svgPt,
-        shiftHeld: e.shiftKey, prevSelectedIds: e.shiftKey ? [...selectedIdsRef.current] : [],
-      };
-      setCursor("crosshair");
-      return;
-    }
-  }, [toolMode, drawShape, screenToSvg, onSelect, onSetSelection, onHitboxDrawn]);
+      // 2. Middle button → pan
+      if (e.button === 1) {
+        const t = transformRef.current;
+        interactionRef.current = {
+          type: "panning",
+          startX: e.clientX,
+          startY: e.clientY,
+          startTx: t.x,
+          startTy: t.y,
+        };
+        setCursor("grabbing");
+        return;
+      }
 
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    const state = interactionRef.current;
-
-    if (state.type === "idle") {
-      // Update cursor based on what's under pointer
-      if (toolMode === "draw") {
+      // 3. Draw mode → draw
+      if (toolMode === "draw" && e.button === 0) {
+        interactionRef.current = { type: "drawing", startSvg: svgPt };
+        setDrawPreview({ shape: drawShape, startSvg: svgPt, currentSvg: svgPt });
         setCursor("crosshair");
         return;
       }
-      if (spaceHeldRef.current) {
-        setCursor("grab");
-        return;
-      }
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      const singleSelected = selectedIdsRef.current.length === 1
-        ? hitboxesRef.current.find((h) => h.id === selectedIdsRef.current[0]) ?? null
-        : null;
-      if (singleSelected && !singleSelected.locked) {
-        const handle = getHandleAtPoint(svgPt.x, svgPt.y, singleSelected, transformRef.current.scale);
-        if (handle) {
-          setCursor(handle.cursor);
-          return;
-        }
-      }
-      const hitAtPoint = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxesRef.current);
-      if (hitAtPoint) {
+
+      // 4. Select mode
+      if (toolMode === "select") {
         const selectedSet = new Set(selectedIdsRef.current);
-        setCursor(selectedSet.has(hitAtPoint.id) ? "move" : "pointer");
-        return;
-      }
-      setCursor("default");
-      return;
-    }
+        const singleSelected =
+          selectedIdsRef.current.length === 1
+            ? (hitboxesRef.current.find((h) => h.id === selectedIdsRef.current[0]) ?? null)
+            : null;
 
-    if (state.type === "panning") {
-      const dx = e.clientX - state.startX;
-      const dy = e.clientY - state.startY;
-      setTransform((t) => ({ ...t, x: state.startTx + dx, y: state.startTy + dy }));
-      return;
-    }
-
-    if (state.type === "drawing") {
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      setDrawPreview((prev) => prev ? { ...prev, currentSvg: svgPt } : null);
-      return;
-    }
-
-    if (state.type === "moving") {
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      const dx = svgPt.x - state.startSvg.x;
-      const dy = svgPt.y - state.startSvg.y;
-
-      if (state.hitboxIds.length === 1) {
-        // Single move
-        const orig = state.originals.get(state.hitboxIds[0]);
-        if (!orig || orig.locked) return;
-        const moved = moveHitbox(orig, dx, dy, viewBox);
-        if (moved.shape === "circle") {
-          onHitboxUpdate(state.hitboxIds[0], { cx: moved.cx, cy: moved.cy });
-        } else {
-          onHitboxUpdate(state.hitboxIds[0], { x: moved.x, y: moved.y });
-        }
-      } else {
-        // Group move — apply delta to each unlocked original
-        const patches: Array<{ id: string; patch: Partial<Hitbox> }> = [];
-        for (const id of state.hitboxIds) {
-          const orig = state.originals.get(id);
-          if (!orig || orig.locked) continue;
-          const moved = moveHitbox(orig, dx, dy, viewBox);
-          if (moved.shape === "circle") {
-            patches.push({ id, patch: { cx: moved.cx, cy: moved.cy } });
-          } else {
-            patches.push({ id, patch: { x: moved.x, y: moved.y } });
+        // 4a. Resize handle (single selection only, not locked)
+        if (singleSelected && !singleSelected.locked) {
+          const handle = getHandleAtPoint(
+            svgPt.x,
+            svgPt.y,
+            singleSelected,
+            transformRef.current.scale,
+          );
+          if (handle) {
+            interactionRef.current = {
+              type: "resizing",
+              hitboxId: singleSelected.id,
+              handle,
+              startSvg: svgPt,
+              original: singleSelected,
+            };
+            setCursor(handle.cursor);
+            return;
           }
         }
-        if (patches.length > 0) onHitboxMultiUpdate(patches);
-      }
-      return;
-    }
 
-    if (state.type === "resizing") {
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      const dx = svgPt.x - state.startSvg.x;
-      const dy = svgPt.y - state.startSvg.y;
-      if (state.original.shape === "rect") {
-        const resized = resizeRect(state.original, state.handle.position, dx, dy, viewBox);
-        onHitboxUpdate(state.hitboxId, resized);
-      } else {
-        const resized = resizeCircle(state.original, state.handle.position, dx, dy, viewBox);
-        onHitboxUpdate(state.hitboxId, resized);
-      }
-      return;
-    }
-
-    if (state.type === "marquee") {
-      const minX = Math.min(state.startScreen.x, e.clientX);
-      const minY = Math.min(state.startScreen.y, e.clientY);
-      const w = Math.abs(e.clientX - state.startScreen.x);
-      const h = Math.abs(e.clientY - state.startScreen.y);
-      // Convert to screen-relative coords (relative to container)
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        setMarqueeRect({ x: minX - rect.left, y: minY - rect.top, width: w, height: h });
-      }
-      // Live-preview selection
-      const topLeft = screenToSvg(Math.min(state.startScreen.x, e.clientX), Math.min(state.startScreen.y, e.clientY));
-      const bottomRight = screenToSvg(Math.max(state.startScreen.x, e.clientX), Math.max(state.startScreen.y, e.clientY));
-      const svgMarquee: BBox = {
-        x: topLeft.x, y: topLeft.y,
-        width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y,
-      };
-      const intersected = hitboxesInMarquee(hitboxesRef.current, svgMarquee);
-      if (state.shiftHeld) {
-        const merged = [...new Set([...state.prevSelectedIds, ...intersected])];
-        onSetSelection(merged);
-      } else {
-        onSetSelection(intersected);
-      }
-      return;
-    }
-  }, [toolMode, viewBox, screenToSvg, onHitboxUpdate, onHitboxMultiUpdate, onSetSelection]);
-
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch { /* already released */ }
-
-    const state = interactionRef.current;
-    const preview = drawPreviewRef.current;
-
-    // Drawing finalization
-    if (state.type === "drawing" && preview) {
-      const { shape, startSvg, currentSvg } = preview;
-      if (shape === "rect") {
-        const x = Math.min(startSvg.x, currentSvg.x);
-        const y = Math.min(startSvg.y, currentSvg.y);
-        const width = Math.abs(currentSvg.x - startSvg.x);
-        const height = Math.abs(currentSvg.y - startSvg.y);
-        if (width > 5 && height > 5) {
-          onHitboxDrawn({
-            shape: "rect",
-            id: crypto.randomUUID(),
-            x, y, width, height,
-            fields: {},
-          });
-        }
-      } else {
-        const dx = currentSvg.x - startSvg.x;
-        const dy = currentSvg.y - startSvg.y;
-        const r = Math.sqrt(dx * dx + dy * dy);
-        if (r > 5) {
-          onHitboxDrawn({
-            shape: "circle",
-            id: crypto.randomUUID(),
-            cx: startSvg.x,
-            cy: startSvg.y,
-            r,
-            fields: {},
-          });
-        }
-      }
-      setDrawPreview(null);
-    }
-
-    // Shift+click toggle (fires on pointer-up if pointer barely moved)
-    if (state.type === "moving" && state.shiftHeld) {
-      const dx = e.clientX - state.pointerStart.x;
-      const dy = e.clientY - state.pointerStart.y;
-      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
-        // This was a Shift+click, not a Shift+drag → toggle
-        const svgPt = screenToSvg(state.pointerStart.x, state.pointerStart.y);
+        // 4b-e. Hitbox body
         const hit = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxesRef.current);
-        if (hit) onToggleSelect(hit.id);
+        if (hit) {
+          const isInSelection = selectedSet.has(hit.id);
+
+          // 4b. Shift held → prepare for pointer-up toggle
+          if (e.shiftKey) {
+            const ids = isInSelection
+              ? [...selectedIdsRef.current]
+              : [...selectedIdsRef.current, hit.id];
+            const originals = new Map(
+              hitboxesRef.current.filter((h) => ids.includes(h.id)).map((h) => [h.id, h]),
+            );
+            interactionRef.current = {
+              type: "moving",
+              hitboxIds: ids,
+              startSvg: svgPt,
+              originals,
+              shiftHeld: true,
+              pointerStart: { x: e.clientX, y: e.clientY },
+            };
+            setCursor("move");
+            return;
+          }
+
+          // 4c. Alt on hitbox → duplicate and move clones
+          if (e.altKey) {
+            const idsToClone = isInSelection ? [...selectedIdsRef.current] : [hit.id];
+            const toClone = hitboxesRef.current.filter((h) => idsToClone.includes(h.id));
+            const clones: Hitbox[] = toClone.map((h) => ({
+              ...h,
+              id: crypto.randomUUID(),
+              locked: false,
+              fields: { ...h.fields },
+            }));
+            clones.forEach((c) => onHitboxDrawn(c));
+            onSetSelection(clones.map((c) => c.id));
+            interactionRef.current = {
+              type: "moving",
+              hitboxIds: clones.map((c) => c.id),
+              startSvg: svgPt,
+              originals: new Map(clones.map((c) => [c.id, c])),
+              shiftHeld: false,
+              pointerStart: { x: e.clientX, y: e.clientY },
+            };
+            setCursor("copy");
+            return;
+          }
+
+          // 4d. Hitbox in current selection → group move
+          if (isInSelection) {
+            const originalsList = hitboxesRef.current.filter((h) => selectedSet.has(h.id));
+            const allLocked = originalsList.every((h) => h.locked);
+            if (allLocked) {
+              setCursor("not-allowed");
+              setTimeout(() => setCursor("default"), 300);
+              return;
+            }
+            interactionRef.current = {
+              type: "moving",
+              hitboxIds: [...selectedIdsRef.current],
+              startSvg: svgPt,
+              originals: new Map(originalsList.map((h) => [h.id, h])),
+              shiftHeld: false,
+              pointerStart: { x: e.clientX, y: e.clientY },
+            };
+            setCursor("move");
+            return;
+          }
+
+          // 4e. Unselected hitbox → select it, begin move (unless locked)
+          onSelect(hit.id);
+          if (!hit.locked) {
+            interactionRef.current = {
+              type: "moving",
+              hitboxIds: [hit.id],
+              startSvg: svgPt,
+              originals: new Map([[hit.id, hit]]),
+              shiftHeld: false,
+              pointerStart: { x: e.clientX, y: e.clientY },
+            };
+            setCursor("move");
+          }
+          return;
+        }
+
+        // 4f. Empty canvas → marquee
+        interactionRef.current = {
+          type: "marquee",
+          startScreen: { x: e.clientX, y: e.clientY },
+          startSvg: svgPt,
+          shiftHeld: e.shiftKey,
+          prevSelectedIds: e.shiftKey ? [...selectedIdsRef.current] : [],
+        };
+        setCursor("crosshair");
+        return;
       }
-    }
+    },
+    [toolMode, drawShape, screenToSvg, onSelect, onSetSelection, onHitboxDrawn],
+  );
 
-    // Marquee finalization
-    if (state.type === "marquee") {
-      // Selection was already set live in handlePointerMove.
-      // If marquee was tiny (< 5px in any dimension) and no shift, treat as click-on-empty → deselect
-      const dx = Math.abs(e.clientX - state.startScreen.x);
-      const dy = Math.abs(e.clientY - state.startScreen.y);
-      if (dx < 5 && dy < 5 && !state.shiftHeld) {
-        onDeselect();
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const state = interactionRef.current;
+
+      if (state.type === "idle") {
+        // Update cursor based on what's under pointer
+        if (toolMode === "draw") {
+          setCursor("crosshair");
+          return;
+        }
+        if (spaceHeldRef.current) {
+          setCursor("grab");
+          return;
+        }
+        const svgPt = screenToSvg(e.clientX, e.clientY);
+        const singleSelected =
+          selectedIdsRef.current.length === 1
+            ? (hitboxesRef.current.find((h) => h.id === selectedIdsRef.current[0]) ?? null)
+            : null;
+        if (singleSelected && !singleSelected.locked) {
+          const handle = getHandleAtPoint(
+            svgPt.x,
+            svgPt.y,
+            singleSelected,
+            transformRef.current.scale,
+          );
+          if (handle) {
+            setCursor(handle.cursor);
+            return;
+          }
+        }
+        const hitAtPoint = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxesRef.current);
+        if (hitAtPoint) {
+          const selectedSet = new Set(selectedIdsRef.current);
+          setCursor(selectedSet.has(hitAtPoint.id) ? "move" : "pointer");
+          return;
+        }
+        setCursor("default");
+        return;
       }
-      setMarqueeRect(null);
-    }
 
-    // Panning — revert cursor
-    if (state.type === "panning") {
-      setCursor(spaceHeldRef.current ? "grab" : "default");
-    }
+      if (state.type === "panning") {
+        const dx = e.clientX - state.startX;
+        const dy = e.clientY - state.startY;
+        setTransform((t) => ({ ...t, x: state.startTx + dx, y: state.startTy + dy }));
+        return;
+      }
 
-    interactionRef.current = { type: "idle" };
-    if (state.type !== "panning") {
-      setCursor(toolMode === "draw" ? "crosshair" : spaceHeldRef.current ? "grab" : "default");
-    }
-  }, [toolMode, screenToSvg, onHitboxDrawn, onToggleSelect, onDeselect]);
+      if (state.type === "drawing") {
+        const svgPt = screenToSvg(e.clientX, e.clientY);
+        setDrawPreview((prev) => (prev ? { ...prev, currentSvg: svgPt } : null));
+        return;
+      }
+
+      if (state.type === "moving") {
+        const svgPt = screenToSvg(e.clientX, e.clientY);
+        const dx = svgPt.x - state.startSvg.x;
+        const dy = svgPt.y - state.startSvg.y;
+
+        if (state.hitboxIds.length === 1) {
+          // Single move
+          const orig = state.originals.get(state.hitboxIds[0]);
+          if (!orig || orig.locked) return;
+          const moved = moveHitbox(orig, dx, dy, viewBox);
+          if (moved.shape === "circle") {
+            onHitboxUpdate(state.hitboxIds[0], { cx: moved.cx, cy: moved.cy });
+          } else {
+            onHitboxUpdate(state.hitboxIds[0], { x: moved.x, y: moved.y });
+          }
+        } else {
+          // Group move — apply delta to each unlocked original
+          const patches: Array<{ id: string; patch: Partial<Hitbox> }> = [];
+          for (const id of state.hitboxIds) {
+            const orig = state.originals.get(id);
+            if (!orig || orig.locked) continue;
+            const moved = moveHitbox(orig, dx, dy, viewBox);
+            if (moved.shape === "circle") {
+              patches.push({ id, patch: { cx: moved.cx, cy: moved.cy } });
+            } else {
+              patches.push({ id, patch: { x: moved.x, y: moved.y } });
+            }
+          }
+          if (patches.length > 0) onHitboxMultiUpdate(patches);
+        }
+        return;
+      }
+
+      if (state.type === "resizing") {
+        const svgPt = screenToSvg(e.clientX, e.clientY);
+        const dx = svgPt.x - state.startSvg.x;
+        const dy = svgPt.y - state.startSvg.y;
+        if (state.original.shape === "rect") {
+          const resized = resizeRect(state.original, state.handle.position, dx, dy, viewBox);
+          onHitboxUpdate(state.hitboxId, resized);
+        } else {
+          const resized = resizeCircle(state.original, state.handle.position, dx, dy, viewBox);
+          onHitboxUpdate(state.hitboxId, resized);
+        }
+        return;
+      }
+
+      if (state.type === "marquee") {
+        const minX = Math.min(state.startScreen.x, e.clientX);
+        const minY = Math.min(state.startScreen.y, e.clientY);
+        const w = Math.abs(e.clientX - state.startScreen.x);
+        const h = Math.abs(e.clientY - state.startScreen.y);
+        // Convert to screen-relative coords (relative to container)
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (rect) {
+          setMarqueeRect({ x: minX - rect.left, y: minY - rect.top, width: w, height: h });
+        }
+        // Live-preview selection
+        const topLeft = screenToSvg(
+          Math.min(state.startScreen.x, e.clientX),
+          Math.min(state.startScreen.y, e.clientY),
+        );
+        const bottomRight = screenToSvg(
+          Math.max(state.startScreen.x, e.clientX),
+          Math.max(state.startScreen.y, e.clientY),
+        );
+        const svgMarquee: BBox = {
+          x: topLeft.x,
+          y: topLeft.y,
+          width: bottomRight.x - topLeft.x,
+          height: bottomRight.y - topLeft.y,
+        };
+        const intersected = hitboxesInMarquee(hitboxesRef.current, svgMarquee);
+        if (state.shiftHeld) {
+          const merged = [...new Set([...state.prevSelectedIds, ...intersected])];
+          onSetSelection(merged);
+        } else {
+          onSetSelection(intersected);
+        }
+        return;
+      }
+    },
+    [toolMode, viewBox, screenToSvg, onHitboxUpdate, onHitboxMultiUpdate, onSetSelection],
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+
+      const state = interactionRef.current;
+      const preview = drawPreviewRef.current;
+
+      // Drawing finalization
+      if (state.type === "drawing" && preview) {
+        const { shape, startSvg, currentSvg } = preview;
+        if (shape === "rect") {
+          const x = Math.min(startSvg.x, currentSvg.x);
+          const y = Math.min(startSvg.y, currentSvg.y);
+          const width = Math.abs(currentSvg.x - startSvg.x);
+          const height = Math.abs(currentSvg.y - startSvg.y);
+          if (width > 5 && height > 5) {
+            onHitboxDrawn({
+              shape: "rect",
+              id: crypto.randomUUID(),
+              x,
+              y,
+              width,
+              height,
+              fields: {},
+            });
+          }
+        } else {
+          const dx = currentSvg.x - startSvg.x;
+          const dy = currentSvg.y - startSvg.y;
+          const r = Math.sqrt(dx * dx + dy * dy);
+          if (r > 5) {
+            onHitboxDrawn({
+              shape: "circle",
+              id: crypto.randomUUID(),
+              cx: startSvg.x,
+              cy: startSvg.y,
+              r,
+              fields: {},
+            });
+          }
+        }
+        setDrawPreview(null);
+      }
+
+      // Shift+click toggle (fires on pointer-up if pointer barely moved)
+      if (state.type === "moving" && state.shiftHeld) {
+        const dx = e.clientX - state.pointerStart.x;
+        const dy = e.clientY - state.pointerStart.y;
+        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
+          // This was a Shift+click, not a Shift+drag → toggle
+          const svgPt = screenToSvg(state.pointerStart.x, state.pointerStart.y);
+          const hit = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxesRef.current);
+          if (hit) onToggleSelect(hit.id);
+        }
+      }
+
+      // Marquee finalization
+      if (state.type === "marquee") {
+        // Selection was already set live in handlePointerMove.
+        // If marquee was tiny (< 5px in any dimension) and no shift, treat as click-on-empty → deselect
+        const dx = Math.abs(e.clientX - state.startScreen.x);
+        const dy = Math.abs(e.clientY - state.startScreen.y);
+        if (dx < 5 && dy < 5 && !state.shiftHeld) {
+          onDeselect();
+        }
+        setMarqueeRect(null);
+      }
+
+      // Panning — revert cursor
+      if (state.type === "panning") {
+        setCursor(spaceHeldRef.current ? "grab" : "default");
+      }
+
+      interactionRef.current = { type: "idle" };
+      if (state.type !== "panning") {
+        setCursor(toolMode === "draw" ? "crosshair" : spaceHeldRef.current ? "grab" : "default");
+      }
+    },
+    [toolMode, screenToSvg, onHitboxDrawn, onToggleSelect, onDeselect],
+  );
 
   return {
     containerRef,
