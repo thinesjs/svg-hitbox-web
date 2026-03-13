@@ -1,32 +1,44 @@
 import { useState } from "react";
-import type { Hitbox } from "./types";
+import type { Hitbox, ToolMode, DrawShape } from "./types";
+import { hitboxBounds, hitboxLabel } from "./hitboxGeometry";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Separator } from "@/components/ui/separator";
+import { Kbd } from "@/components/ui/kbd";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface HitboxSidebarProps {
   hitboxes: Hitbox[];
   selectedId: string | null;
   svgFilename: string | null;
+  toolMode: ToolMode;
+  drawShape: DrawShape;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onLoadSvg: () => void;
   onImport: () => void;
   onExportJSON: () => void;
   onExportTS: () => void;
-  drawMode: boolean;
-  onToggleDrawMode: () => void;
+  onToolModeChange: (mode: ToolMode) => void;
+  onDrawShapeChange: (shape: DrawShape) => void;
 }
 
 export default function HitboxSidebar({
   hitboxes,
   selectedId,
   svgFilename,
+  toolMode,
+  drawShape,
   onSelect,
   onDelete,
   onLoadSvg,
   onImport,
   onExportJSON,
   onExportTS,
-  drawMode,
-  onToggleDrawMode,
+  onToolModeChange,
+  onDrawShapeChange,
 }: HitboxSidebarProps) {
   const [search, setSearch] = useState("");
 
@@ -38,158 +50,154 @@ export default function HitboxSidebar({
     : hitboxes;
 
   return (
-    <div
-      style={{
-        width: 280,
-        background: "var(--surface)",
-        borderRight: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        flexShrink: 0,
-      }}
-    >
-      {/* Header */}
-      <div style={{ padding: "16px 16px 12px" }}>
-        <h1 style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 4 }}>
-          Hitbox Labeller
-        </h1>
-        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {svgFilename || "No SVG loaded"}
-        </p>
-      </div>
+    <TooltipProvider delayDuration={300}>
+      <div className="w-[280px] bg-sidebar border-r border-border flex flex-col overflow-hidden shrink-0">
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3">
+          <h1 className="text-base font-bold tracking-tight mb-1">Hitbox Labeller</h1>
+          <p className="text-xs text-muted-foreground">{svgFilename || "No SVG loaded"}</p>
+        </div>
 
-      {/* Toolbar */}
-      <div style={{ padding: "0 16px 8px", display: "flex", gap: 6 }}>
-        <button onClick={onLoadSvg} style={toolBtn}>Load SVG</button>
-        <button
-          onClick={onToggleDrawMode}
-          style={{
-            ...toolBtn,
-            background: drawMode ? "var(--accent)" : "transparent",
-            color: drawMode ? "#fff" : "var(--text-muted)",
-            border: drawMode ? "1px solid var(--accent)" : "1px solid var(--border)",
-          }}
-        >
-          Draw
-        </button>
-      </div>
+        {/* Tool mode toggle */}
+        <div className="px-4 pb-2">
+          <ToggleGroup
+            type="single"
+            value={toolMode}
+            onValueChange={(v) => { if (v) onToolModeChange(v as ToolMode); }}
+            className="w-full"
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem value="select" className="flex-1 text-xs gap-1">
+                  Select <Kbd>V</Kbd>
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent>Select, move, and resize hitboxes</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem value="draw" className="flex-1 text-xs gap-1">
+                  Draw <Kbd>D</Kbd>
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent>Draw new hitboxes on the canvas</TooltipContent>
+            </Tooltip>
+          </ToggleGroup>
+        </div>
 
-      {/* Search */}
-      <div style={{ padding: "0 16px 8px" }}>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search hitboxes..."
-          style={{
-            width: "100%",
-            padding: "5px 8px",
-            fontSize: 12,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 4,
-            color: "var(--text)",
-            outline: "none",
-          }}
-        />
-      </div>
-
-      {/* Hitbox count */}
-      <div style={{ padding: "0 16px 4px", fontSize: 12, color: "var(--text-muted)" }}>
-        {filtered.length}{search ? ` / ${hitboxes.length}` : ""} hitbox{hitboxes.length !== 1 ? "es" : ""}
-      </div>
-
-      {/* Hitbox list */}
-      <div style={{ flex: 1, overflow: "auto", padding: "4px 0" }}>
-        {filtered.map((hb) => {
-          const label = hb.fields.stop || hb.fields.route || hb.fields.mode || hb.id.slice(0, 8);
-          const isSelected = hb.id === selectedId;
-          return (
-            <div
-              key={hb.id}
-              onClick={() => onSelect(hb.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 16px",
-                background: isSelected ? "var(--surface-hover)" : "transparent",
-                cursor: "pointer",
-                fontSize: 13,
-              }}
+        {/* Shape selector (only visible in draw mode) */}
+        {toolMode === "draw" && (
+          <div className="px-4 pb-2">
+            <ToggleGroup
+              type="single"
+              value={drawShape}
+              onValueChange={(v) => { if (v) onDrawShapeChange(v as DrawShape); }}
+              className="w-full"
             >
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--accent)", flexShrink: 0 }} />
-              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {label}
-              </span>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace" }}>
-                {Math.round(hb.width)}x{Math.round(hb.height)}
-              </span>
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(hb.id); }}
-                style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 14, padding: "2px 4px", flexShrink: 0 }}
-                title="Delete hitbox"
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
-      </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem value="rect" className="flex-1 text-xs gap-1">
+                    ▭ Rect <Kbd>R</Kbd>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Draw rectangles</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ToggleGroupItem value="circle" className="flex-1 text-xs gap-1">
+                    ○ Circle <Kbd>C</Kbd>
+                  </ToggleGroupItem>
+                </TooltipTrigger>
+                <TooltipContent>Draw circles</TooltipContent>
+              </Tooltip>
+            </ToggleGroup>
+          </div>
+        )}
 
-      {/* Keyboard hints */}
-      <div style={{ padding: "8px 16px", borderTop: "1px solid var(--border)", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.6 }}>
-        <div><kbd style={kbdStyle}>D</kbd> Toggle draw mode</div>
-        <div><kbd style={kbdStyle}>Delete</kbd> Remove selected</div>
-        <div><kbd style={kbdStyle}>Esc</kbd> Deselect</div>
-        <div><kbd style={kbdStyle}>Scroll</kbd> Zoom</div>
-      </div>
+        <Separator />
 
-      {/* Import/Export */}
-      <div style={{ padding: 12, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 6 }}>
-        <button onClick={onImport} style={btnSecondary}>Import (.json)</button>
-        <button onClick={onExportJSON} style={btnSecondary}>Save (.json)</button>
-        <button onClick={onExportTS} style={btnPrimary}>Export (.ts)</button>
+        {/* Toolbar */}
+        <div className="px-4 py-2">
+          <Button variant="outline" size="sm" className="w-full text-xs" onClick={onLoadSvg}>
+            Load SVG
+          </Button>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 pb-2">
+          <Input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search hitboxes..."
+            className="h-8 text-xs"
+          />
+        </div>
+
+        {/* Count */}
+        <div className="px-4 pb-1 text-xs text-muted-foreground">
+          {filtered.length}{search ? ` / ${hitboxes.length}` : ""} hitbox{hitboxes.length !== 1 ? "es" : ""}
+        </div>
+
+        {/* Hitbox list */}
+        <ScrollArea className="flex-1">
+          <div className="py-1">
+            {filtered.map((hb) => {
+              const label = hitboxLabel(hb);
+              const isSelected = hb.id === selectedId;
+              const bounds = hitboxBounds(hb);
+              return (
+                <div
+                  key={hb.id}
+                  onClick={() => onSelect(hb.id)}
+                  className={`flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm hover:bg-accent/10 ${
+                    isSelected ? "bg-accent/20" : ""
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-sm shrink-0 ${
+                    hb.shape === "circle" ? "rounded-full" : ""
+                  } bg-primary`} />
+                  <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                    {label}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    {Math.round(bounds.width)}×{Math.round(bounds.height)}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(hb.id); }}
+                    className="text-muted-foreground hover:text-destructive text-sm px-1 shrink-0"
+                    title="Delete hitbox"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </ScrollArea>
+
+        <Separator />
+
+        {/* Keyboard hints */}
+        <div className="px-4 py-2 text-[11px] text-muted-foreground leading-relaxed">
+          <div><Kbd>V</Kbd> Select  <Kbd>D</Kbd> Draw</div>
+          <div><Kbd>R</Kbd> Rect  <Kbd>C</Kbd> Circle</div>
+          <div><Kbd>Del</Kbd> Remove  <Kbd>Esc</Kbd> Deselect</div>
+        </div>
+
+        {/* Import/Export */}
+        <div className="p-3 border-t border-border flex flex-col gap-1.5">
+          <Button variant="outline" size="sm" className="w-full text-xs" onClick={onImport}>
+            Import (.json)
+          </Button>
+          <Button variant="outline" size="sm" className="w-full text-xs" onClick={onExportJSON}>
+            Save (.json)
+          </Button>
+          <Button size="sm" className="w-full text-xs" onClick={onExportTS}>
+            Export (.ts)
+          </Button>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
-
-const toolBtn: React.CSSProperties = {
-  flex: 1,
-  padding: "5px 8px",
-  fontSize: 12,
-  border: "1px solid var(--border)",
-  borderRadius: 4,
-  background: "transparent",
-  color: "var(--text-muted)",
-};
-
-const kbdStyle: React.CSSProperties = {
-  display: "inline-block",
-  padding: "1px 5px",
-  fontSize: 10,
-  background: "var(--border)",
-  borderRadius: 3,
-  fontFamily: "monospace",
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "8px 12px",
-  fontSize: 13,
-  fontWeight: 600,
-  border: "none",
-  borderRadius: 6,
-  background: "var(--accent)",
-  color: "#fff",
-};
-
-const btnSecondary: React.CSSProperties = {
-  padding: "8px 12px",
-  fontSize: 13,
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  background: "transparent",
-  color: "var(--text-muted)",
-};
