@@ -11,11 +11,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 interface HitboxSidebarProps {
   hitboxes: Hitbox[];
-  selectedId: string | null;
+  selectedIds: string[];
   svgFilename: string | null;
   toolMode: ToolMode;
   drawShape: DrawShape;
   onSelect: (id: string) => void;
+  onToggleSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onLoadSvg: () => void;
   onImport: () => void;
@@ -27,11 +28,12 @@ interface HitboxSidebarProps {
 
 export default function HitboxSidebar({
   hitboxes,
-  selectedId,
+  selectedIds,
   svgFilename,
   toolMode,
   drawShape,
   onSelect,
+  onToggleSelect,
   onDelete,
   onLoadSvg,
   onImport,
@@ -137,6 +139,7 @@ export default function HitboxSidebar({
         {/* Count */}
         <div className="px-4 pb-1 text-xs text-muted-foreground">
           {filtered.length}{search ? ` / ${hitboxes.length}` : ""} hitbox{hitboxes.length !== 1 ? "es" : ""}
+          {selectedIds.length > 1 && ` · ${selectedIds.length} selected`}
         </div>
 
         {/* Hitbox list */}
@@ -144,12 +147,18 @@ export default function HitboxSidebar({
           <div className="py-1">
             {filtered.map((hb) => {
               const label = hitboxLabel(hb);
-              const isSelected = hb.id === selectedId;
+              const isSelected = selectedIds.includes(hb.id);
               const bounds = hitboxBounds(hb);
               return (
                 <div
                   key={hb.id}
-                  onClick={() => onSelect(hb.id)}
+                  onClick={(e) => {
+                    if (e.shiftKey) {
+                      onToggleSelect(hb.id);
+                    } else {
+                      onSelect(hb.id);
+                    }
+                  }}
                   className={`flex items-center gap-2 px-4 py-1.5 cursor-pointer text-sm hover:bg-accent/10 ${
                     isSelected ? "bg-accent/20" : ""
                   }`}
@@ -157,19 +166,22 @@ export default function HitboxSidebar({
                   <span className={`w-2 h-2 rounded-sm shrink-0 ${
                     hb.shape === "circle" ? "rounded-full" : ""
                   } bg-primary`} />
+                  {hb.locked && <span className="text-[10px]">🔒</span>}
                   <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                     {label}
                   </span>
                   <span className="text-[11px] text-muted-foreground font-mono">
                     {Math.round(bounds.width)}×{Math.round(bounds.height)}
                   </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onDelete(hb.id); }}
-                    className="text-muted-foreground hover:text-destructive text-sm px-1 shrink-0"
-                    title="Delete hitbox"
-                  >
-                    ×
-                  </button>
+                  {!hb.locked && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDelete(hb.id); }}
+                      className="text-muted-foreground hover:text-destructive text-sm px-1 shrink-0"
+                      title="Delete hitbox"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -179,10 +191,13 @@ export default function HitboxSidebar({
         <Separator />
 
         {/* Keyboard hints */}
-        <div className="px-4 py-2 text-[11px] text-muted-foreground leading-relaxed">
-          <div><Kbd>V</Kbd> Select  <Kbd>D</Kbd> Draw</div>
-          <div><Kbd>R</Kbd> Rect  <Kbd>C</Kbd> Circle</div>
-          <div><Kbd>Del</Kbd> Remove  <Kbd>Esc</Kbd> Deselect</div>
+        <div className="px-4 py-2 flex flex-col gap-1.5 text-[11px] text-muted-foreground">
+          <div className="flex gap-2"><span><Kbd>V</Kbd> Select</span> <span><Kbd>D</Kbd> Draw</span></div>
+          <div className="flex gap-2"><span><Kbd>R</Kbd> Rect</span> <span><Kbd>C</Kbd> Circle</span></div>
+          <div className="flex gap-2"><span><Kbd>Del</Kbd> Remove</span> <span><Kbd>Esc</Kbd> Deselect</span></div>
+          <div className="flex gap-2"><span><Kbd>⌘C</Kbd> Copy</span> <span><Kbd>⌘V</Kbd> Paste</span></div>
+          <div className="flex gap-2"><span><Kbd>⌘D</Kbd> Duplicate</span> <span><Kbd>⌘A</Kbd> Select All</span></div>
+          <div><Kbd>Space</Kbd>+Drag Pan  <Kbd>Alt</Kbd>+Drag Duplicate</div>
         </div>
 
         {/* Import/Export */}
