@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.2.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.1.0...v1.2.0) (2026-03-13)
+
+
+### Features
+
+* add Docker build and GHCR deploy workflow ([5885897](https://github.com/thinesjs/svg-hitbox-web/commit/588589765a3ba7ef7b54c02e27e40a3b3515882e))
+
+
+### Bug Fixes
+
+* **ci:** remove ENV secret references from deploy workflow ([8271a85](https://github.com/thinesjs/svg-hitbox-web/commit/8271a8545671a1f6e58bf26f13b83f436053f2a2))
+
 ## 1.1.0 (2026-03-13)
 
 
