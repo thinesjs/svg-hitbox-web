@@ -1,17 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { createHighlighter, type Highlighter } from "shiki";
+import { createHighlighterCore, type HighlighterCore } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import langJson from "shiki/langs/json.mjs";
+import langTypescript from "shiki/langs/typescript.mjs";
+import themeGithubLight from "shiki/themes/github-light.mjs";
 
-let highlighterPromise: Promise<Highlighter> | null = null;
+let highlighterPromise: Promise<HighlighterCore> | null = null;
 
 function getHighlighter() {
   if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({
-      themes: ["github-light"],
-      langs: ["json", "typescript"],
+    highlighterPromise = createHighlighterCore({
+      engine: createJavaScriptRegexEngine(),
+      themes: [themeGithubLight],
+      langs: [langJson, langTypescript],
     });
   }
   return highlighterPromise;
@@ -33,19 +38,24 @@ export default function CodePreviewDialog({
   const [activeTab, setActiveTab] = useState<"json" | "ts">("json");
   const [highlightedHtml, setHighlightedHtml] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const rawCode = activeTab === "json" ? jsonCode : tsCode;
   const lang = activeTab === "json" ? "json" : "typescript";
 
-  // Reset tab when dialog opens
+  // Reset tab when dialog opens, clear any pending copy timer
   useEffect(() => {
     if (open) {
       setActiveTab("json");
       setCopied(false);
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
     }
   }, [open]);
 
-  // Highlight code async
+  // Highlight code async — input is app-generated code only, so dangerouslySetInnerHTML is safe
   useEffect(() => {
     if (!open || !rawCode) {
       setHighlightedHtml("");
@@ -67,15 +77,16 @@ export default function CodePreviewDialog({
     };
   }, [open, rawCode, lang]);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(rawCode);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard API unavailable
+      setCopied(false);
     }
-  };
+  }, [rawCode]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

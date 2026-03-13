@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { flushSync } from "react-dom";
 import type { SvgData, Hitbox, ToolMode, DrawShape } from "./types";
 import { generateJsonString, generateTsString } from "./codeGeneration";
@@ -66,6 +66,8 @@ export default function App() {
   const [drawShape, setDrawShape] = useState<DrawShape>("rect");
   const [clipboard, setClipboard] = useState<Hitbox[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  const handlePreview = useCallback(() => setPreviewOpen(true), []);
 
   // Ref for coordinate conversion from SvgCanvas (used by context menu)
   const screenToSvgRef = useRef<((cx: number, cy: number) => { x: number; y: number }) | null>(
@@ -506,8 +508,14 @@ export default function App() {
   const selectedHitbox =
     selectedIds.length === 1 ? (hitboxes.find((h) => h.id === selectedIds[0]) ?? null) : null;
 
-  const jsonCode = previewOpen && svgData ? generateJsonString(hitboxes, svgData) : "";
-  const tsCode = previewOpen && svgData ? generateTsString(hitboxes, svgData) : "";
+  const jsonCode = useMemo(
+    () => (previewOpen && svgData ? generateJsonString(hitboxes, svgData) : ""),
+    [previewOpen, hitboxes, svgData],
+  );
+  const tsCode = useMemo(
+    () => (previewOpen && svgData ? generateTsString(hitboxes, svgData) : ""),
+    [previewOpen, hitboxes, svgData],
+  );
 
   if (!svgData) {
     return (
@@ -539,7 +547,7 @@ export default function App() {
         onImport={handleImportJSON}
         onExportJSON={handleExportJSON}
         onExportTS={handleExportTS}
-        onPreview={() => setPreviewOpen(true)}
+        onPreview={handlePreview}
         onToolModeChange={setToolMode}
         onDrawShapeChange={setDrawShape}
       />
