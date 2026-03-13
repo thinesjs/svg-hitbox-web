@@ -1,9 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
-import type { SvgData, Hitbox, RectHitbox, HitboxExport, ToolMode, DrawShape } from "./types";
+import { useState, useCallback, useEffect, useRef } from "react";
+import type { SvgData, Hitbox, HitboxExport, ToolMode, DrawShape } from "./types";
 import SvgCanvas from "./SvgCanvas";
 import HitboxSidebar from "./HitboxSidebar";
 import HitboxEditor from "./HitboxEditor";
 import { Button } from "@/components/ui/button";
+import {
+  bringToFront, bringForward, sendBackward, sendToBack,
+  flipHorizontal, flipVertical,
+} from "./hitboxGeometry";
 
 function parseSvgViewBox(svgText: string): { x: number; y: number; width: number; height: number } {
   const vbMatch = svgText.match(/viewBox="([^"]+)"/);
@@ -40,9 +44,65 @@ function migrateHitbox(h: unknown): Hitbox | null {
 export default function App() {
   const [svgData, setSvgData] = useState<SvgData | null>(null);
   const [hitboxes, setHitboxes] = useState<Hitbox[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [drawShape, setDrawShape] = useState<DrawShape>("rect");
+  const [clipboard, setClipboard] = useState<Hitbox[]>([]);
+
+  // Refs for keyboard handler (avoid stale closures without extra deps)
+  const hitboxesRef = useRef(hitboxes);
+  hitboxesRef.current = hitboxes;
+  const clipboardRef = useRef(clipboard);
+  clipboardRef.current = clipboard;
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+
+  // Load persisted state from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("hitbox-labeller-state");
+      if (!saved) return;
+      const data = JSON.parse(saved);
+      if (data.svgData) setSvgData(data.svgData);
+      if (Array.isArray(data.hitboxes)) {
+        const migrated = data.hitboxes.map(migrateHitbox).filter((h: Hitbox | null): h is Hitbox => h !== null);
+        setHitboxes(migrated);
+      }
+    } catch {
+      // Ignore corrupt data
+    }
+  }, []);
+
+  // Auto-save to localStorage on change (debounced)
+  useEffect(() => {
+    if (!svgData) return;
+    const timeout = setTimeout(() => {
+      try {
+        localStorage.setItem("hitbox-labeller-state", JSON.stringify({ svgData, hitboxes }));
+      } catch {
+        // localStorage full or unavailable
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [svgData, hitboxes]);
+
+  // Disable browser zoom (Ctrl+scroll, Ctrl+plus/minus, pinch)
+  useEffect(() => {
+    const preventZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+    };
+    const preventKeyZoom = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0")) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("wheel", preventZoom, { passive: false });
+    document.addEventListener("keydown", preventKeyZoom);
+    return () => {
+      document.removeEventListener("wheel", preventZoom);
+      document.removeEventListener("keydown", preventKeyZoom);
+    };
+  }, []);
 
   const handleLoadSvg = useCallback(() => {
     const input = document.createElement("input");
@@ -54,7 +114,7 @@ export default function App() {
       const text = await file.text();
       setSvgData({ filename: file.name, svgText: text, viewBox: parseSvgViewBox(text) });
       setHitboxes([]);
-      setSelectedId(null);
+      setSelectedIds([]);
       setToolMode("select");
     };
     input.click();
@@ -62,7 +122,7 @@ export default function App() {
 
   const handleHitboxDrawn = useCallback((hitbox: Hitbox) => {
     setHitboxes((prev) => [...prev, hitbox]);
-    setSelectedId(hitbox.id);
+    setSelectedIds([hitbox.id]);
     setToolMode("select");
   }, []);
 
@@ -72,9 +132,24 @@ export default function App() {
     );
   }, []);
 
-  const handleDelete = useCallback((id: string) => {
+  const handleDeleteSelected = useCallback(() => {
+    const ids = new Set(selectedIdsRef.current);
+    const lockedInSelection = new Set(
+      hitboxesRef.current
+        .filter((h) => ids.has(h.id) && h.locked)
+        .map((h) => h.id)
+    );
+    setHitboxes((prev) => prev.filter((h) =>
+      !ids.has(h.id) || lockedInSelection.has(h.id)
+    ));
+    setSelectedIds((prev) => prev.filter((id) => lockedInSelection.has(id)));
+  }, []);
+
+  const handleDeleteSingle = useCallback((id: string) => {
+    const hb = hitboxesRef.current.find((h) => h.id === id);
+    if (hb?.locked) return;
     setHitboxes((prev) => prev.filter((h) => h.id !== id));
-    setSelectedId((prev) => (prev === id ? null : prev));
+    setSelectedIds((prev) => prev.filter((sid) => sid !== id));
   }, []);
 
   const handleFieldsChange = useCallback((id: string, fields: Record<string, string>) => {
@@ -82,9 +157,59 @@ export default function App() {
   }, []);
 
   const handleSelect = useCallback((id: string) => {
-    setSelectedId(id);
+    setSelectedIds([id]);
     setToolMode("select");
   }, []);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
+  }, []);
+
+  // --- Z-order handlers ---
+
+  const handleBringToFront = useCallback(() => {
+    setHitboxes((prev) => bringToFront(prev, selectedIdsRef.current));
+  }, []);
+
+  const handleBringForward = useCallback(() => {
+    setHitboxes((prev) => bringForward(prev, selectedIdsRef.current));
+  }, []);
+
+  const handleSendBackward = useCallback(() => {
+    setHitboxes((prev) => sendBackward(prev, selectedIdsRef.current));
+  }, []);
+
+  const handleSendToBack = useCallback(() => {
+    setHitboxes((prev) => sendToBack(prev, selectedIdsRef.current));
+  }, []);
+
+  // --- Lock handlers ---
+
+  const handleLock = useCallback(() => {
+    setHitboxes((prev) =>
+      prev.map((h) => selectedIdsRef.current.includes(h.id) ? { ...h, locked: true } : h)
+    );
+  }, []);
+
+  const handleUnlock = useCallback(() => {
+    setHitboxes((prev) =>
+      prev.map((h) => selectedIdsRef.current.includes(h.id) ? { ...h, locked: false } : h)
+    );
+  }, []);
+
+  // --- Flip handlers ---
+
+  const handleFlipHorizontal = useCallback(() => {
+    if (!svgData) return;
+    setHitboxes((prev) => flipHorizontal(prev, selectedIdsRef.current, svgData.viewBox));
+  }, [svgData]);
+
+  const handleFlipVertical = useCallback(() => {
+    if (!svgData) return;
+    setHitboxes((prev) => flipVertical(prev, selectedIdsRef.current, svgData.viewBox));
+  }, [svgData]);
 
   // --- Import/Export ---
 
@@ -130,7 +255,7 @@ export default function App() {
           if (!proceed) return;
         }
         setHitboxes(migrated as Hitbox[]);
-        setSelectedId(null);
+        setSelectedIds([]);
       } catch {
         alert("Invalid JSON file");
       }
@@ -181,6 +306,62 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+      if (e.ctrlKey || e.metaKey) {
+        // ⌘C / Ctrl+C — copy all selected hitboxes
+        if (e.key.toLowerCase() === "c") {
+          const ids = selectedIdsRef.current;
+          if (ids.length === 0) return;
+          e.preventDefault();
+          const copied = hitboxesRef.current.filter((h) => ids.includes(h.id));
+          if (copied.length > 0) setClipboard(copied);
+          return;
+        }
+
+        // ⌘V / Ctrl+V — paste clipboard with +20 offset
+        if (e.key.toLowerCase() === "v") {
+          const cb = clipboardRef.current;
+          if (cb.length === 0) return;
+          e.preventDefault();
+          const newHitboxes: Hitbox[] = cb.map((orig) => {
+            const newId = crypto.randomUUID();
+            if (orig.shape === "circle") {
+              return { ...orig, id: newId, cx: orig.cx + 20, cy: orig.cy + 20, fields: { ...orig.fields }, locked: false };
+            }
+            return { ...orig, id: newId, x: orig.x + 20, y: orig.y + 20, fields: { ...orig.fields }, locked: false };
+          });
+          setHitboxes((prev) => [...prev, ...newHitboxes]);
+          setSelectedIds(newHitboxes.map((h) => h.id));
+          return;
+        }
+
+        // ⌘D / Ctrl+D — duplicate selected
+        if (e.key.toLowerCase() === "d") {
+          const ids = selectedIdsRef.current;
+          if (ids.length === 0) return;
+          e.preventDefault();
+          const toDuplicate = hitboxesRef.current.filter((h) => ids.includes(h.id));
+          const newHitboxes: Hitbox[] = toDuplicate.map((orig) => {
+            const newId = crypto.randomUUID();
+            if (orig.shape === "circle") {
+              return { ...orig, id: newId, cx: orig.cx + 20, cy: orig.cy + 20, fields: { ...orig.fields }, locked: false };
+            }
+            return { ...orig, id: newId, x: orig.x + 20, y: orig.y + 20, fields: { ...orig.fields }, locked: false };
+          });
+          setHitboxes((prev) => [...prev, ...newHitboxes]);
+          setSelectedIds(newHitboxes.map((h) => h.id));
+          return;
+        }
+
+        // ⌘A / Ctrl+A — select all
+        if (e.key.toLowerCase() === "a") {
+          e.preventDefault();
+          setSelectedIds(hitboxesRef.current.map((h) => h.id));
+          return;
+        }
+
+        return;
+      }
+
       switch (e.key.toLowerCase()) {
         case "v":
           e.preventDefault();
@@ -202,25 +383,27 @@ export default function App() {
           if (toolMode === "draw") {
             setToolMode("select");
           } else {
-            setSelectedId(null);
+            setSelectedIds([]);
           }
           break;
         case "delete":
         case "backspace":
-          if (selectedId) {
+          if (selectedIdsRef.current.length > 0) {
             e.preventDefault();
-            handleDelete(selectedId);
+            handleDeleteSelected();
           }
           break;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toolMode, selectedId, handleDelete]);
+  }, [toolMode, handleDeleteSelected]);
 
   // --- Render ---
 
-  const selectedHitbox = selectedId ? hitboxes.find((h) => h.id === selectedId) ?? null : null;
+  const selectedHitbox = selectedIds.length === 1
+    ? hitboxes.find((h) => h.id === selectedIds[0]) ?? null
+    : null;
 
   if (!svgData) {
     return (
@@ -239,12 +422,12 @@ export default function App() {
     <div className="flex h-screen overflow-hidden">
       <HitboxSidebar
         hitboxes={hitboxes}
-        selectedId={selectedId}
+        selectedId={selectedIds[0] ?? null}
         svgFilename={svgData.filename}
         toolMode={toolMode}
         drawShape={drawShape}
         onSelect={handleSelect}
-        onDelete={handleDelete}
+        onDelete={handleDeleteSingle}
         onLoadSvg={handleLoadSvg}
         onImport={handleImportJSON}
         onExportJSON={handleExportJSON}
@@ -256,20 +439,20 @@ export default function App() {
         <SvgCanvas
           svgData={svgData}
           hitboxes={hitboxes}
-          selectedId={selectedId}
+          selectedId={selectedIds[0] ?? null}
           toolMode={toolMode}
           drawShape={drawShape}
           onHitboxDrawn={handleHitboxDrawn}
           onHitboxUpdate={handleHitboxUpdate}
           onHitboxClick={handleSelect}
-          onDeselect={() => setSelectedId(null)}
+          onDeselect={() => setSelectedIds([])}
         />
         {selectedHitbox && (
           <HitboxEditor
             hitbox={selectedHitbox}
             onFieldsChange={handleFieldsChange}
-            onDelete={handleDelete}
-            onClose={() => setSelectedId(null)}
+            onDelete={handleDeleteSingle}
+            onClose={() => setSelectedIds([])}
           />
         )}
       </div>
