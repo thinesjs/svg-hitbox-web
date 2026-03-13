@@ -42,6 +42,22 @@ export default function App() {
     input.click();
   }, []);
 
+  const handleHitboxDrawn = useCallback((rect: { x: number; y: number; width: number; height: number }) => {
+    const newHitbox: Hitbox = {
+      id: crypto.randomUUID(),
+      ...rect,
+      fields: {},
+    };
+    setHitboxes((prev) => [...prev, newHitbox]);
+    setSelectedId(newHitbox.id);
+    setDrawMode(false);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setHitboxes((prev) => prev.filter((h) => h.id !== id));
+    setSelectedId((prev) => (prev === id ? null : prev));
+  }, []);
+
   if (!svgData) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", flexDirection: "column", gap: 16 }}>
@@ -54,8 +70,35 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      {/* Sidebar will be added in Task 3 */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-        <SvgCanvas svgData={svgData} />
+        <SvgCanvas
+          svgData={svgData}
+          hitboxes={hitboxes}
+          selectedId={selectedId}
+          drawMode={drawMode}
+          onHitboxDrawn={handleHitboxDrawn}
+          onHitboxClick={setSelectedId}
+          onDeselect={() => setSelectedId(null)}
+        />
+        {/* Temporary draw mode toggle until sidebar exists */}
+        <button
+          onClick={() => setDrawMode((v) => !v)}
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            zIndex: 10,
+            padding: "6px 12px",
+            fontSize: 12,
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+            background: drawMode ? "var(--accent)" : "var(--surface)",
+            color: drawMode ? "#fff" : "var(--text-muted)",
+          }}
+        >
+          {drawMode ? "Drawing..." : "Draw"}
+        </button>
       </div>
     </div>
   );
