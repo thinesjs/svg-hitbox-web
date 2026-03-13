@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
-import type { SvgData, Hitbox, HitboxExport, ToolMode, DrawShape } from "./types";
+import type { SvgData, Hitbox, ToolMode, DrawShape } from "./types";
+import { generateJsonString, generateTsString } from "./codeGeneration";
 import SvgCanvas from "./SvgCanvas";
 import HitboxSidebar from "./HitboxSidebar";
 import HitboxEditor from "./HitboxEditor";
@@ -54,15 +55,6 @@ function migrateHitbox(h: unknown): Hitbox | null {
     return null;
 
   return { shape: "rect", ...obj } as unknown as Hitbox;
-}
-
-/** Strip internal `locked` field from hitboxes to keep exports clean. */
-function cleanHitboxesForExport(hitboxes: Hitbox[]): Hitbox[] {
-  return hitboxes.map((h) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { locked, ...rest } = h;
-    return rest as Hitbox;
-  });
 }
 
 export default function App() {
@@ -373,12 +365,8 @@ export default function App() {
 
   const handleExportJSON = useCallback(() => {
     if (!svgData) return;
-    const data: HitboxExport = {
-      svgFilename: svgData.filename,
-      svgViewBox: `${svgData.viewBox.x} ${svgData.viewBox.y} ${svgData.viewBox.width} ${svgData.viewBox.height}`,
-      hitboxes: cleanHitboxesForExport(hitboxes),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const json = generateJsonString(hitboxes, svgData);
+    const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -423,39 +411,8 @@ export default function App() {
 
   const handleExportTS = useCallback(() => {
     if (!svgData) return;
-    const lines: string[] = [];
-    lines.push("export interface HitboxBase {");
-    lines.push("  id: string;");
-    lines.push("  fields: Record<string, string>;");
-    lines.push("}");
-    lines.push("");
-    lines.push("export interface RectHitbox extends HitboxBase {");
-    lines.push('  shape: "rect";');
-    lines.push("  x: number;");
-    lines.push("  y: number;");
-    lines.push("  width: number;");
-    lines.push("  height: number;");
-    lines.push("}");
-    lines.push("");
-    lines.push("export interface CircleHitbox extends HitboxBase {");
-    lines.push('  shape: "circle";');
-    lines.push("  cx: number;");
-    lines.push("  cy: number;");
-    lines.push("  r: number;");
-    lines.push("}");
-    lines.push("");
-    lines.push("export type Hitbox = RectHitbox | CircleHitbox;\n");
-    lines.push(`export const svgFilename = ${JSON.stringify(svgData.filename)};\n`);
-    lines.push(
-      `export const svgViewBox = "${svgData.viewBox.x} ${svgData.viewBox.y} ${svgData.viewBox.width} ${svgData.viewBox.height}";\n`,
-    );
-    lines.push(
-      "export const hitboxes: Hitbox[] = " +
-        JSON.stringify(cleanHitboxesForExport(hitboxes), null, 2) +
-        ";\n",
-    );
-
-    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const ts = generateTsString(hitboxes, svgData);
+    const blob = new Blob([ts], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
