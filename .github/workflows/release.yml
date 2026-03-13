@@ -88,14 +88,6 @@ jobs:
         run: |
           git push --follow-tags origin master
 
-      - name: Merge master into develop
-        if: steps.check-release.outputs.released == 'true'
-        run: |
-          git fetch origin develop
-          git checkout develop
-          git merge --no-ff master -m "Merge branch 'master' into develop"
-          git push origin develop
-
       - name: Create Release
         if: steps.check-release.outputs.released == 'true'
         uses: softprops/action-gh-release@v2
