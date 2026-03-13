@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
-import type { SvgData, Hitbox, HitboxExport } from "./types";
+import type { SvgData, Hitbox, RectHitbox, HitboxExport, ToolMode, DrawShape } from "./types";
 import SvgCanvas from "./SvgCanvas";
 import HitboxSidebar from "./HitboxSidebar";
 import HitboxEditor from "./HitboxEditor";
+import { Button } from "@/components/ui/button";
 
 function parseSvgViewBox(svgText: string): { x: number; y: number; width: number; height: number } {
   const vbMatch = svgText.match(/viewBox="([^"]+)"/);
@@ -18,11 +19,30 @@ function parseSvgViewBox(svgText: string): { x: number; y: number; width: number
   return { x: 0, y: 0, width: 800, height: 600 };
 }
 
+/** Migrate v1 hitbox data (no shape field) to v2 (shape: "rect") */
+function migrateHitbox(h: unknown): Hitbox | null {
+  if (typeof h !== "object" || h === null) return null;
+  const obj = h as Record<string, unknown>;
+  if (typeof obj.id !== "string" || typeof obj.fields !== "object" || obj.fields === null) return null;
+
+  if (obj.shape === "circle") {
+    if (typeof obj.cx !== "number" || typeof obj.cy !== "number" || typeof obj.r !== "number") return null;
+    return obj as unknown as Hitbox;
+  }
+
+  // Rect — either explicit shape or legacy (no shape field)
+  if (typeof obj.x !== "number" || typeof obj.y !== "number" ||
+      typeof obj.width !== "number" || typeof obj.height !== "number") return null;
+
+  return { shape: "rect", ...obj } as unknown as Hitbox;
+}
+
 export default function App() {
   const [svgData, setSvgData] = useState<SvgData | null>(null);
   const [hitboxes, setHitboxes] = useState<Hitbox[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [drawMode, setDrawMode] = useState(false);
+  const [toolMode, setToolMode] = useState<ToolMode>("select");
+  const [drawShape, setDrawShape] = useState<DrawShape>("rect");
 
   const handleLoadSvg = useCallback(() => {
     const input = document.createElement("input");
@@ -32,27 +52,24 @@ export default function App() {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const text = await file.text();
-      setSvgData({
-        filename: file.name,
-        svgText: text,
-        viewBox: parseSvgViewBox(text),
-      });
+      setSvgData({ filename: file.name, svgText: text, viewBox: parseSvgViewBox(text) });
       setHitboxes([]);
       setSelectedId(null);
-      setDrawMode(false);
+      setToolMode("select");
     };
     input.click();
   }, []);
 
-  const handleHitboxDrawn = useCallback((rect: { x: number; y: number; width: number; height: number }) => {
-    const newHitbox: Hitbox = {
-      id: crypto.randomUUID(),
-      ...rect,
-      fields: {},
-    };
-    setHitboxes((prev) => [...prev, newHitbox]);
-    setSelectedId(newHitbox.id);
-    setDrawMode(false);
+  const handleHitboxDrawn = useCallback((hitbox: Hitbox) => {
+    setHitboxes((prev) => [...prev, hitbox]);
+    setSelectedId(hitbox.id);
+    setToolMode("select");
+  }, []);
+
+  const handleHitboxUpdate = useCallback((id: string, patch: Partial<Hitbox>) => {
+    setHitboxes((prev) =>
+      prev.map((h) => (h.id === id ? { ...h, ...patch } as Hitbox : h))
+    );
   }, []);
 
   const handleDelete = useCallback((id: string) => {
@@ -62,6 +79,11 @@ export default function App() {
 
   const handleFieldsChange = useCallback((id: string, fields: Record<string, string>) => {
     setHitboxes((prev) => prev.map((h) => (h.id === id ? { ...h, fields } : h)));
+  }, []);
+
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    setToolMode("select");
   }, []);
 
   // --- Import/Export ---
@@ -91,17 +113,14 @@ export default function App() {
       if (!file) return;
       const text = await file.text();
       try {
-        const data = JSON.parse(text) as HitboxExport;
+        const data = JSON.parse(text);
         if (!Array.isArray(data.hitboxes)) {
           alert("Invalid hitbox JSON: missing hitboxes array");
           return;
         }
-        const valid = data.hitboxes.every(
-          (h) => typeof h.id === "string" && typeof h.x === "number" && typeof h.y === "number" &&
-                 typeof h.width === "number" && typeof h.height === "number" && h.fields !== null && typeof h.fields === "object"
-        );
-        if (!valid) {
-          alert("Invalid hitbox JSON: hitbox entries have missing or invalid fields");
+        const migrated = data.hitboxes.map(migrateHitbox);
+        if (migrated.some((h: Hitbox | null) => h === null)) {
+          alert("Invalid hitbox JSON: some entries have missing or invalid fields");
           return;
         }
         if (svgData && data.svgFilename && data.svgFilename !== svgData.filename) {
@@ -110,7 +129,7 @@ export default function App() {
           );
           if (!proceed) return;
         }
-        setHitboxes(data.hitboxes);
+        setHitboxes(migrated as Hitbox[]);
         setSelectedId(null);
       } catch {
         alert("Invalid JSON file");
@@ -122,14 +141,27 @@ export default function App() {
   const handleExportTS = useCallback(() => {
     if (!svgData) return;
     const lines: string[] = [];
-    lines.push("export interface Hitbox {");
+    lines.push("export interface HitboxBase {");
     lines.push("  id: string;");
+    lines.push("  fields: Record<string, string>;");
+    lines.push("}");
+    lines.push("");
+    lines.push("export interface RectHitbox extends HitboxBase {");
+    lines.push('  shape: "rect";');
     lines.push("  x: number;");
     lines.push("  y: number;");
     lines.push("  width: number;");
     lines.push("  height: number;");
-    lines.push("  fields: Record<string, string>;");
-    lines.push("}\n");
+    lines.push("}");
+    lines.push("");
+    lines.push("export interface CircleHitbox extends HitboxBase {");
+    lines.push('  shape: "circle";');
+    lines.push("  cx: number;");
+    lines.push("  cy: number;");
+    lines.push("  r: number;");
+    lines.push("}");
+    lines.push("");
+    lines.push("export type Hitbox = RectHitbox | CircleHitbox;\n");
     lines.push(`export const svgFilename = ${JSON.stringify(svgData.filename)};\n`);
     lines.push(`export const svgViewBox = "${svgData.viewBox.x} ${svgData.viewBox.y} ${svgData.viewBox.width} ${svgData.viewBox.height}";\n`);
     lines.push("export const hitboxes: Hitbox[] = " + JSON.stringify(hitboxes, null, 2) + ";\n");
@@ -149,23 +181,42 @@ export default function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      if (e.key === "d" || e.key === "D") {
-        e.preventDefault();
-        setDrawMode((v) => !v);
-      } else if (e.key === "Escape") {
-        if (drawMode) {
-          setDrawMode(false);
-        } else {
-          setSelectedId(null);
-        }
-      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
-        e.preventDefault();
-        handleDelete(selectedId);
+      switch (e.key.toLowerCase()) {
+        case "v":
+          e.preventDefault();
+          setToolMode("select");
+          break;
+        case "d":
+          e.preventDefault();
+          setToolMode("draw");
+          break;
+        case "r":
+          e.preventDefault();
+          setDrawShape("rect");
+          break;
+        case "c":
+          e.preventDefault();
+          setDrawShape("circle");
+          break;
+        case "escape":
+          if (toolMode === "draw") {
+            setToolMode("select");
+          } else {
+            setSelectedId(null);
+          }
+          break;
+        case "delete":
+        case "backspace":
+          if (selectedId) {
+            e.preventDefault();
+            handleDelete(selectedId);
+          }
+          break;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [drawMode, selectedId, handleDelete]);
+  }, [toolMode, selectedId, handleDelete]);
 
   // --- Render ---
 
@@ -173,42 +224,44 @@ export default function App() {
 
   if (!svgData) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", flexDirection: "column", gap: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700 }}>Hitbox Labeller</h1>
-        <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Load an SVG to start drawing hitboxes</p>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={handleLoadSvg} style={loadBtnStyle}>Load SVG</button>
-          <button onClick={handleImportJSON} style={{ ...loadBtnStyle, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
-            Import JSON
-          </button>
+      <div className="flex items-center justify-center h-screen flex-col gap-4">
+        <h1 className="text-xl font-bold">Hitbox Labeller</h1>
+        <p className="text-sm text-muted-foreground">Load an SVG to start drawing hitboxes</p>
+        <div className="flex gap-2">
+          <Button onClick={handleLoadSvg}>Load SVG</Button>
+          <Button variant="outline" onClick={handleImportJSON}>Import JSON</Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div className="flex h-screen overflow-hidden">
       <HitboxSidebar
         hitboxes={hitboxes}
         selectedId={selectedId}
         svgFilename={svgData.filename}
-        onSelect={setSelectedId}
+        toolMode={toolMode}
+        drawShape={drawShape}
+        onSelect={handleSelect}
         onDelete={handleDelete}
         onLoadSvg={handleLoadSvg}
         onImport={handleImportJSON}
         onExportJSON={handleExportJSON}
         onExportTS={handleExportTS}
-        drawMode={drawMode}
-        onToggleDrawMode={() => setDrawMode((v) => !v)}
+        onToolModeChange={setToolMode}
+        onDrawShapeChange={setDrawShape}
       />
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      <div className="flex-1 relative overflow-hidden">
         <SvgCanvas
           svgData={svgData}
           hitboxes={hitboxes}
           selectedId={selectedId}
-          drawMode={drawMode}
+          toolMode={toolMode}
+          drawShape={drawShape}
           onHitboxDrawn={handleHitboxDrawn}
-          onHitboxClick={setSelectedId}
+          onHitboxUpdate={handleHitboxUpdate}
+          onHitboxClick={handleSelect}
           onDeselect={() => setSelectedId(null)}
         />
         {selectedHitbox && (
@@ -223,14 +276,3 @@ export default function App() {
     </div>
   );
 }
-
-const loadBtnStyle: React.CSSProperties = {
-  padding: "10px 24px",
-  fontSize: 14,
-  fontWeight: 600,
-  border: "none",
-  borderRadius: 8,
-  background: "var(--accent)",
-  color: "#fff",
-  cursor: "pointer",
-};

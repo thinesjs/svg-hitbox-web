@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Hitbox } from "./types";
+import { hitboxBounds } from "./hitboxGeometry";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 interface HitboxEditorProps {
   hitbox: Hitbox;
@@ -52,121 +57,93 @@ export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose
 
   const customKeys = Object.keys(fields).filter((k) => !BUILTIN_KEYS.includes(k));
 
+  // Shape-specific coordinate display
+  const coordDisplay = hitbox.shape === "circle"
+    ? `cx:${Math.round(hitbox.cx)} cy:${Math.round(hitbox.cy)} r:${Math.round(hitbox.r)}`
+    : `${Math.round(hitbox.x)},${Math.round(hitbox.y)} ${Math.round(hitbox.width)}×${Math.round(hitbox.height)}`;
+
   return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: 20,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 100,
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        padding: 16,
-        width: 480,
-        maxHeight: "50vh",
-        overflowY: "auto",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-      }}
-    >
+    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-popover border border-border rounded-xl p-4 w-[480px] max-h-[50vh] overflow-y-auto shadow-xl">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Edit Hitbox</div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace" }}>
-            {hitbox.id.slice(0, 8)} · {Math.round(hitbox.x)},{Math.round(hitbox.y)} · {Math.round(hitbox.width)}x{Math.round(hitbox.height)}
+      <div className="flex items-center mb-3">
+        <div className="flex-1">
+          <div className="text-sm font-semibold">Edit Hitbox</div>
+          <div className="text-xs text-muted-foreground font-mono">
+            <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-[10px] font-medium mr-1.5">
+              {hitbox.shape}
+            </span>
+            {hitbox.id.slice(0, 8)} · {coordDisplay}
           </div>
         </div>
-        <button
-          onClick={() => onDelete(hitbox.id)}
-          style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 12, marginRight: 8, cursor: "pointer" }}
-        >
+        <Button variant="destructive" size="sm" className="mr-2 h-7 text-xs" onClick={() => onDelete(hitbox.id)}>
           Delete
-        </button>
-        <button
-          onClick={onClose}
-          style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 16, cursor: "pointer" }}
-        >
+        </Button>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={onClose}>
           ×
-        </button>
+        </Button>
       </div>
+
+      <Separator className="mb-3" />
 
       {/* Built-in fields */}
       {BUILTIN_KEYS.map((key, i) => (
-        <div key={key} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-          <label style={{ width: 60, fontSize: 12, color: "var(--text-muted)", textAlign: "right" }}>{key}</label>
-          <input
+        <div key={key} className="flex gap-2 mb-2 items-center">
+          <Label className="w-14 text-right text-xs text-muted-foreground shrink-0">{key}</Label>
+          <Input
             ref={i === 0 ? firstInputRef : undefined}
             type="text"
             value={fields[key] || ""}
             onChange={(e) => updateField(key, e.target.value)}
             placeholder={key}
-            style={inputStyle}
+            className="h-8 text-sm"
           />
         </div>
       ))}
 
       {/* Custom fields */}
       {customKeys.map((key) => (
-        <div key={key} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-          <label style={{ width: 60, fontSize: 12, color: "var(--text-muted)", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div key={key} className="flex gap-2 mb-2 items-center">
+          <Label className="w-14 text-right text-xs text-muted-foreground shrink-0 overflow-hidden text-ellipsis">
             {key}
-          </label>
-          <input
+          </Label>
+          <Input
             type="text"
             value={fields[key] || ""}
             onChange={(e) => updateField(key, e.target.value)}
-            style={inputStyle}
+            className="h-8 text-sm"
           />
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-muted-foreground shrink-0"
             onClick={() => removeField(key)}
-            style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 14, cursor: "pointer" }}
             title="Remove field"
           >
             ×
-          </button>
+          </Button>
         </div>
       ))}
 
       {/* Add custom field */}
-      <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center" }}>
-        <input
+      <div className="flex gap-2 mt-1 items-center">
+        <Input
           type="text"
           value={newKey}
           onChange={(e) => setNewKey(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomField(); } }}
           placeholder="New field name..."
-          style={{ ...inputStyle, flex: 1 }}
+          className="h-8 text-sm flex-1"
         />
-        <button
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs"
           onClick={addCustomField}
           disabled={!newKey.trim()}
-          style={{
-            padding: "6px 12px",
-            fontSize: 12,
-            border: "1px solid var(--border)",
-            borderRadius: 4,
-            background: "transparent",
-            color: "var(--text-muted)",
-            opacity: newKey.trim() ? 1 : 0.4,
-            cursor: "pointer",
-          }}
         >
           + Add
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "6px 10px",
-  fontSize: 13,
-  background: "var(--bg)",
-  border: "1px solid var(--border)",
-  borderRadius: 4,
-  color: "var(--text)",
-  outline: "none",
-};
