@@ -98,7 +98,7 @@ export default function App() {
         }
         const valid = data.hitboxes.every(
           (h) => typeof h.id === "string" && typeof h.x === "number" && typeof h.y === "number" &&
-                 typeof h.width === "number" && typeof h.height === "number" && typeof h.fields === "object"
+                 typeof h.width === "number" && typeof h.height === "number" && h.fields !== null && typeof h.fields === "object"
         );
         if (!valid) {
           alert("Invalid hitbox JSON: hitbox entries have missing or invalid fields");

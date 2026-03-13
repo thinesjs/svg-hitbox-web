@@ -22,24 +22,33 @@ export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose
   }, [hitbox.id]);
 
   const updateField = useCallback((key: string, value: string) => {
-    const updated = { ...fields, [key]: value };
-    setFields(updated);
-    onFieldsChange(hitbox.id, updated);
-  }, [fields, hitbox.id, onFieldsChange]);
+    setFields((prev) => {
+      const updated = { ...prev, [key]: value };
+      onFieldsChange(hitbox.id, updated);
+      return updated;
+    });
+  }, [hitbox.id, onFieldsChange]);
 
   const removeField = useCallback((key: string) => {
-    const updated = { ...fields };
-    delete updated[key];
-    setFields(updated);
-    onFieldsChange(hitbox.id, updated);
-  }, [fields, hitbox.id, onFieldsChange]);
+    setFields((prev) => {
+      const updated = { ...prev };
+      delete updated[key];
+      onFieldsChange(hitbox.id, updated);
+      return updated;
+    });
+  }, [hitbox.id, onFieldsChange]);
 
   const addCustomField = useCallback(() => {
     const key = newKey.trim();
-    if (!key || key in fields) return;
-    updateField(key, "");
+    if (!key) return;
+    setFields((prev) => {
+      if (key in prev) return prev;
+      const updated = { ...prev, [key]: "" };
+      onFieldsChange(hitbox.id, updated);
+      return updated;
+    });
     setNewKey("");
-  }, [newKey, fields, updateField]);
+  }, [newKey, hitbox.id, onFieldsChange]);
 
   const customKeys = Object.keys(fields).filter((k) => !BUILTIN_KEYS.includes(k));
 
