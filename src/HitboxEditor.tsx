@@ -75,7 +75,7 @@ export default function HitboxEditor({ hitbox, onFieldsChange, onDelete, onClose
             {hitbox.id.slice(0, 8)} · {coordDisplay}
           </div>
         </div>
-        <Button variant="destructive" size="sm" className="mr-2 h-7 text-xs" onClick={() => onDelete(hitbox.id)}>
+        <Button variant="destructive" size="sm" className="mr-2 h-7 text-xs" onClick={() => onDelete(hitbox.id)} disabled={!!hitbox.locked}>
           Delete
         </Button>
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={onClose}>

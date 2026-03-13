@@ -44,6 +44,16 @@ function migrateHitbox(h: unknown): Hitbox | null {
   return { shape: "rect", ...obj } as unknown as Hitbox;
 }
 
+/** Strip `locked: false` from hitboxes to keep exports clean. */
+function cleanHitboxesForExport(hitboxes: Hitbox[]): Hitbox[] {
+  return hitboxes.map((h) => {
+    if (h.locked) return h;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { locked, ...rest } = h;
+    return rest as Hitbox;
+  });
+}
+
 export default function App() {
   const [svgData, setSvgData] = useState<SvgData | null>(null);
   const [hitboxes, setHitboxes] = useState<Hitbox[]>([]);
@@ -317,7 +327,7 @@ export default function App() {
     const data: HitboxExport = {
       svgFilename: svgData.filename,
       svgViewBox: `${svgData.viewBox.x} ${svgData.viewBox.y} ${svgData.viewBox.width} ${svgData.viewBox.height}`,
-      hitboxes,
+      hitboxes: cleanHitboxesForExport(hitboxes),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -388,7 +398,7 @@ export default function App() {
     lines.push("export type Hitbox = RectHitbox | CircleHitbox;\n");
     lines.push(`export const svgFilename = ${JSON.stringify(svgData.filename)};\n`);
     lines.push(`export const svgViewBox = "${svgData.viewBox.x} ${svgData.viewBox.y} ${svgData.viewBox.width} ${svgData.viewBox.height}";\n`);
-    lines.push("export const hitboxes: Hitbox[] = " + JSON.stringify(hitboxes, null, 2) + ";\n");
+    lines.push("export const hitboxes: Hitbox[] = " + JSON.stringify(cleanHitboxesForExport(hitboxes), null, 2) + ";\n");
 
     const blob = new Blob([lines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
