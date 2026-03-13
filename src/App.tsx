@@ -44,10 +44,9 @@ function migrateHitbox(h: unknown): Hitbox | null {
   return { shape: "rect", ...obj } as unknown as Hitbox;
 }
 
-/** Strip `locked: false` from hitboxes to keep exports clean. */
+/** Strip internal `locked` field from hitboxes to keep exports clean. */
 function cleanHitboxesForExport(hitboxes: Hitbox[]): Hitbox[] {
   return hitboxes.map((h) => {
-    if (h.locked) return h;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { locked, ...rest } = h;
     return rest as Hitbox;
