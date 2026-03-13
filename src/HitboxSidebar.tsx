@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { Hitbox, ToolMode, DrawShape } from "./types";
 import { hitboxBounds, hitboxLabel } from "./hitboxGeometry";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,8 @@ export default function HitboxSidebar({
   onDrawShapeChange,
 }: HitboxSidebarProps) {
   const [search, setSearch] = useState("");
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const filtered = search
     ? hitboxes.filter((hb) => {
@@ -147,7 +149,7 @@ export default function HitboxSidebar({
           <div className="py-1">
             {filtered.map((hb) => {
               const label = hitboxLabel(hb);
-              const isSelected = selectedIds.includes(hb.id);
+              const isSelected = selectedSet.has(hb.id);
               const bounds = hitboxBounds(hb);
               return (
                 <div
@@ -166,7 +168,7 @@ export default function HitboxSidebar({
                   <span className={`w-2 h-2 rounded-sm shrink-0 ${
                     hb.shape === "circle" ? "rounded-full" : ""
                   } bg-primary`} />
-                  {hb.locked && <span className="text-[10px]">🔒</span>}
+                  {hb.locked && <span className="text-[10px]" role="img" aria-label="Locked">🔒</span>}
                   <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                     {label}
                   </span>
