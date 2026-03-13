@@ -19,10 +19,6 @@ on:
         description: "Build environment flag (prod or stg)"
         required: true
         type: string
-    secrets:
-      ENV:
-        required: false
-
 permissions:
   contents: read
   packages: write
@@ -77,11 +73,6 @@ jobs:
             type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
             type=sha
             type=raw,value=latest,enable=${{ inputs.environment == 'production' }}
-
-      - name: Export environment files
-        if: secrets.ENV != ''
-        run: |
-          echo "${{ secrets.ENV }}" | base64 -d > .env.${{ inputs.environment }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5

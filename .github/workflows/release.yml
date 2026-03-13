@@ -117,5 +117,3 @@ jobs:
       version: ${{ needs.release.outputs.version }}
       environment: production
       build_env: prod
-    secrets:
-      ENV: ${{ secrets.ENV }}
