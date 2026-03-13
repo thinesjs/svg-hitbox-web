@@ -1,76 +1,79 @@
-import { useRef, useState, useCallback, useEffect } from "react";
-import type { SvgData, Hitbox, RectHitbox, CircleHitbox, ToolMode, DrawShape, HandleInfo } from "./types";
+import { useEffect } from "react";
+import type { SvgData, Hitbox, ToolMode, DrawShape } from "./types";
 import { Button } from "@/components/ui/button";
 import {
   hitboxBounds,
-  pointInHitbox,
-  getHitboxAtPoint,
   getHandlePositions,
-  getHandleAtPoint,
-  resizeRect,
-  resizeCircle,
-  moveHitbox,
   hitboxLabel,
+  selectionBounds,
 } from "./hitboxGeometry";
+import { useCanvasInteractions } from "./useCanvasInteractions";
 
 interface SvgCanvasProps {
   svgData: SvgData;
   hitboxes: Hitbox[];
-  selectedId: string | null;
+  selectedIds: string[];
   toolMode: ToolMode;
   drawShape: DrawShape;
   onHitboxDrawn: (hitbox: Hitbox) => void;
   onHitboxUpdate: (id: string, patch: Partial<Hitbox>) => void;
-  onHitboxClick: (id: string) => void;
+  onHitboxMultiUpdate: (patches: Array<{ id: string; patch: Partial<Hitbox> }>) => void;
+  onSelect: (id: string) => void;
+  onToggleSelect: (id: string) => void;
+  onSetSelection: (ids: string[]) => void;
   onDeselect: () => void;
+  screenToSvgRef?: React.MutableRefObject<((cx: number, cy: number) => { x: number; y: number }) | null>;
 }
-
-interface Transform {
-  x: number;
-  y: number;
-  scale: number;
-}
-
-type InteractionState =
-  | { type: "idle" }
-  | { type: "panning"; startX: number; startY: number; startTx: number; startTy: number }
-  | { type: "drawing"; startSvg: { x: number; y: number } }
-  | { type: "moving"; hitboxId: string; startSvg: { x: number; y: number }; original: Hitbox }
-  | { type: "resizing"; hitboxId: string; handle: HandleInfo; startSvg: { x: number; y: number }; original: Hitbox };
 
 export default function SvgCanvas({
   svgData,
   hitboxes,
-  selectedId,
+  selectedIds,
   toolMode,
   drawShape,
   onHitboxDrawn,
   onHitboxUpdate,
-  onHitboxClick,
+  onHitboxMultiUpdate,
+  onSelect,
+  onToggleSelect,
+  onSetSelection,
   onDeselect,
+  screenToSvgRef,
 }: SvgCanvasProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const svgContainerRef = useRef<HTMLDivElement>(null);
-  const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 });
-  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
-  const [cursor, setCursor] = useState("grab");
-
-  // Draw preview state
-  const [drawPreview, setDrawPreview] = useState<{
-    shape: DrawShape;
-    startSvg: { x: number; y: number };
-    currentSvg: { x: number; y: number };
-  } | null>(null);
-
-  // Interaction state (ref to avoid stale closures in pointer handlers)
-  const interactionRef = useRef<InteractionState>({ type: "idle" });
-  const transformRef = useRef(transform);
-  transformRef.current = transform;
+  const {
+    containerRef,
+    svgContainerRef,
+    transform,
+    cursor,
+    drawPreview,
+    marqueeRect,
+    containerSize,
+    screenToSvg,
+    handlers,
+    setTransform,
+  } = useCanvasInteractions({
+    svgData,
+    hitboxes,
+    selectedIds,
+    toolMode,
+    drawShape,
+    onHitboxDrawn,
+    onHitboxUpdate,
+    onHitboxMultiUpdate,
+    onSelect,
+    onToggleSelect,
+    onSetSelection,
+    onDeselect,
+  });
 
   const { viewBox } = svgData;
   const { width: svgW, height: svgH } = viewBox;
+  const scale = transform.scale;
 
-  const selectedHitbox = selectedId ? hitboxes.find((h) => h.id === selectedId) ?? null : null;
+  // Expose screenToSvg to parent via ref (for context menu, Task 5)
+  useEffect(() => {
+    if (screenToSvgRef) screenToSvgRef.current = screenToSvg;
+  }, [screenToSvg, screenToSvgRef]);
 
   // Inject SVG inline
   useEffect(() => {
@@ -85,277 +88,21 @@ export default function SvgCanvas({
       svg.style.top = "0";
       svg.style.left = "0";
     }
-  }, [svgData]);
+  }, [svgData, svgContainerRef]);
 
-  // Observe container size
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      setContainerSize({ w: width, h: height });
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  // Fit to container on load
-  useEffect(() => {
-    if (containerSize.w === 0) return;
-    const scaleX = containerSize.w / svgW;
-    const scaleY = containerSize.h / svgH;
-    const scale = Math.min(scaleX, scaleY) * 0.95;
-    const x = (containerSize.w - svgW * scale) / 2;
-    const y = (containerSize.h - svgH * scale) / 2;
-    setTransform({ x, y, scale });
-  }, [containerSize, svgW, svgH]);
-
-  // Convert screen coords to SVG coords
-  const screenToSvg = useCallback((clientX: number, clientY: number) => {
-    const el = containerRef.current;
-    if (!el) return { x: 0, y: 0 };
-    const rect = el.getBoundingClientRect();
-    const t = transformRef.current;
-    return {
-      x: (clientX - rect.left - t.x) / t.scale,
-      y: (clientY - rect.top - t.y) / t.scale,
-    };
-  }, []);
-
-  // Wheel zoom
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const el = containerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    setTransform((t) => {
-      const newScale = Math.min(Math.max(t.scale * factor, 0.1), 20);
-      const ratio = newScale / t.scale;
-      return { scale: newScale, x: mx - (mx - t.x) * ratio, y: my - (my - t.y) * ratio };
-    });
-  }, []);
-
-  // Cancel in-progress drawing on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && interactionRef.current.type === "drawing") {
-        interactionRef.current = { type: "idle" };
-        setDrawPreview(null);
-        setCursor("grab");
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  // --- Pointer handlers ---
-
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0 && e.button !== 1) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    const svgPt = screenToSvg(e.clientX, e.clientY);
-
-    // Draw mode: always start drawing
-    if (toolMode === "draw" && e.button === 0) {
-      interactionRef.current = { type: "drawing", startSvg: svgPt };
-      setDrawPreview({ shape: drawShape, startSvg: svgPt, currentSvg: svgPt });
-      setCursor("crosshair");
-      return;
-    }
-
-    // Select mode: check handles → selected hitbox → any hitbox → canvas
-    if (toolMode === "select") {
-      // 1. Resize handle
-      if (selectedHitbox) {
-        const handle = getHandleAtPoint(svgPt.x, svgPt.y, selectedHitbox, transformRef.current.scale);
-        if (handle) {
-          interactionRef.current = {
-            type: "resizing",
-            hitboxId: selectedHitbox.id,
-            handle,
-            startSvg: svgPt,
-            original: selectedHitbox,
-          };
-          setCursor(handle.cursor);
-          return;
-        }
-      }
-
-      // 2-3. Hitbox body (selected or unselected)
-      const hitAtPoint = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxes);
-      if (hitAtPoint) {
-        if (hitAtPoint.id !== selectedId) {
-          onHitboxClick(hitAtPoint.id);
-        }
-        interactionRef.current = {
-          type: "moving",
-          hitboxId: hitAtPoint.id,
-          startSvg: svgPt,
-          original: hitAtPoint,
-        };
-        setCursor("move");
-        return;
-      }
-    }
-
-    // 4. Empty canvas → pan
-    const t = transformRef.current;
-    interactionRef.current = {
-      type: "panning",
-      startX: e.clientX,
-      startY: e.clientY,
-      startTx: t.x,
-      startTy: t.y,
-    };
-    setCursor("grabbing");
-  }, [toolMode, drawShape, selectedId, selectedHitbox, hitboxes, screenToSvg, onHitboxClick]);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    const state = interactionRef.current;
-
-    if (state.type === "idle") {
-      // Update cursor based on what's under pointer
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      if (toolMode === "draw") {
-        setCursor("crosshair");
-        return;
-      }
-      if (selectedHitbox) {
-        const handle = getHandleAtPoint(svgPt.x, svgPt.y, selectedHitbox, transformRef.current.scale);
-        if (handle) {
-          setCursor(handle.cursor);
-          return;
-        }
-      }
-      const hitAtPoint = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxes);
-      if (hitAtPoint) {
-        setCursor(hitAtPoint.id === selectedId ? "move" : "pointer");
-        return;
-      }
-      setCursor("grab");
-      return;
-    }
-
-    if (state.type === "panning") {
-      const dx = e.clientX - state.startX;
-      const dy = e.clientY - state.startY;
-      setTransform((t) => ({ ...t, x: state.startTx + dx, y: state.startTy + dy }));
-      return;
-    }
-
-    if (state.type === "drawing") {
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      setDrawPreview((prev) => prev ? { ...prev, currentSvg: svgPt } : null);
-      return;
-    }
-
-    if (state.type === "moving") {
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      const dx = svgPt.x - state.startSvg.x;
-      const dy = svgPt.y - state.startSvg.y;
-      const moved = moveHitbox(state.original, dx, dy, viewBox);
-      if (moved.shape === "circle") {
-        onHitboxUpdate(state.hitboxId, { cx: moved.cx, cy: moved.cy });
-      } else {
-        onHitboxUpdate(state.hitboxId, { x: moved.x, y: moved.y });
-      }
-      return;
-    }
-
-    if (state.type === "resizing") {
-      const svgPt = screenToSvg(e.clientX, e.clientY);
-      const dx = svgPt.x - state.startSvg.x;
-      const dy = svgPt.y - state.startSvg.y;
-      if (state.original.shape === "rect") {
-        const resized = resizeRect(state.original, state.handle.position, dx, dy, viewBox);
-        onHitboxUpdate(state.hitboxId, resized);
-      } else {
-        const resized = resizeCircle(state.original, state.handle.position, dx, dy, viewBox);
-        onHitboxUpdate(state.hitboxId, resized);
-      }
-      return;
-    }
-  }, [toolMode, selectedId, selectedHitbox, hitboxes, viewBox, screenToSvg, onHitboxUpdate]);
-
-  const handlePointerUp = useCallback(() => {
-    const state = interactionRef.current;
-
-    if (state.type === "drawing" && drawPreview) {
-      const { shape, startSvg, currentSvg } = drawPreview;
-      if (shape === "rect") {
-        const x = Math.min(startSvg.x, currentSvg.x);
-        const y = Math.min(startSvg.y, currentSvg.y);
-        const width = Math.abs(currentSvg.x - startSvg.x);
-        const height = Math.abs(currentSvg.y - startSvg.y);
-        if (width > 5 && height > 5) {
-          onHitboxDrawn({
-            shape: "rect",
-            id: crypto.randomUUID(),
-            x, y, width, height,
-            fields: {},
-          });
-        }
-      } else {
-        const dx = currentSvg.x - startSvg.x;
-        const dy = currentSvg.y - startSvg.y;
-        const r = Math.sqrt(dx * dx + dy * dy);
-        if (r > 5) {
-          onHitboxDrawn({
-            shape: "circle",
-            id: crypto.randomUUID(),
-            cx: startSvg.x,
-            cy: startSvg.y,
-            r,
-            fields: {},
-          });
-        }
-      }
-      setDrawPreview(null);
-    }
-
-    interactionRef.current = { type: "idle" };
-    setCursor(toolMode === "draw" ? "crosshair" : "grab");
-  }, [drawPreview, toolMode, onHitboxDrawn]);
-
-  // Click handler for deselect (only fires on click, not drag)
-  const clickStart = useRef<{ x: number; y: number } | null>(null);
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    clickStart.current = { x: e.clientX, y: e.clientY };
-  }, []);
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    if (!clickStart.current) return;
-    const dx = e.clientX - clickStart.current.x;
-    const dy = e.clientY - clickStart.current.y;
-    clickStart.current = null;
-    // Only treat as click if pointer barely moved (< 5px)
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) return;
-
-    // If click was on a hitbox, don't deselect
-    const svgPt = screenToSvg(e.clientX, e.clientY);
-    if (getHitboxAtPoint(svgPt.x, svgPt.y, hitboxes)) return;
-
-    if (selectedId && toolMode === "select") {
-      onDeselect();
-    }
-  }, [selectedId, toolMode, hitboxes, screenToSvg, onDeselect]);
-
-  // --- Render ---
-
-  const scale = transform.scale;
+  // Derived state
+  const singleSelectedHitbox = selectedIds.length === 1
+    ? hitboxes.find((h) => h.id === selectedIds[0]) ?? null
+    : null;
 
   return (
     <div
-      ref={containerRef}
-      onWheel={handleWheel}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onMouseDown={handleMouseDown}
-      onClick={handleClick}
-      className="w-full h-full overflow-hidden relative"
+      ref={containerRef as React.RefObject<HTMLDivElement>}
+      onWheel={handlers.onWheel}
+      onPointerDown={handlers.onPointerDown}
+      onPointerMove={handlers.onPointerMove}
+      onPointerUp={handlers.onPointerUp}
+      className="w-full h-full overflow-hidden relative select-none"
       style={{ cursor, background: "#0e1117" }}
     >
       {/* Zoom indicator */}
@@ -389,7 +136,7 @@ export default function SvgCanvas({
 
       {/* SVG background layer */}
       <div
-        ref={svgContainerRef}
+        ref={svgContainerRef as React.RefObject<HTMLDivElement>}
         style={{
           width: svgW,
           height: svgH,
@@ -418,7 +165,7 @@ export default function SvgCanvas({
       >
         {/* Hitbox shapes */}
         {hitboxes.map((hb) => {
-          const isSelected = hb.id === selectedId;
+          const isSelected = selectedIds.includes(hb.id);
           const label = hitboxLabel(hb);
           return (
             <g key={hb.id}>
@@ -457,10 +204,10 @@ export default function SvgCanvas({
           );
         })}
 
-        {/* Resize handles for selected hitbox */}
-        {selectedHitbox && toolMode === "select" && (
+        {/* Resize handles for single selected hitbox (not locked) */}
+        {selectedIds.length === 1 && singleSelectedHitbox && !singleSelectedHitbox.locked && toolMode === "select" && (
           <g>
-            {getHandlePositions(selectedHitbox).map((handle) => {
+            {getHandlePositions(singleSelectedHitbox).map((handle) => {
               const handleSize = 10 / scale;
               return (
                 <rect
@@ -477,6 +224,33 @@ export default function SvgCanvas({
             })}
           </g>
         )}
+
+        {/* Group bounding box for multi-selection */}
+        {selectedIds.length > 1 && (() => {
+          const bounds = selectionBounds(hitboxes, selectedIds);
+          if (bounds.width === 0 && bounds.height === 0) return null;
+          return (
+            <rect
+              x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height}
+              fill="none" stroke="#58a6ff" strokeWidth={1 / scale}
+              strokeDasharray={`${4 / scale} ${3 / scale}`}
+            />
+          );
+        })()}
+
+        {/* Lock icon for locked hitboxes */}
+        {hitboxes.filter((h) => h.locked).map((hb) => {
+          const b = hitboxBounds(hb);
+          const iconSize = 12 / scale;
+          const ix = b.x + b.width - iconSize * 0.2;
+          const iy = b.y - iconSize * 0.8;
+          return (
+            <g key={`lock-${hb.id}`} transform={`translate(${ix}, ${iy}) scale(${iconSize / 16})`}>
+              <path d="M6 8V6a4 4 0 1 1 8 0v2h1a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h1z" fill="#58a6ff" />
+              <path d="M8 6v2h4V6a2 2 0 1 0-4 0z" fill="#1a1a2e" />
+            </g>
+          );
+        })}
 
         {/* Draw preview */}
         {drawPreview && (() => {
@@ -513,6 +287,23 @@ export default function SvgCanvas({
           }
         })()}
       </svg>
+
+      {/* Marquee selection rectangle */}
+      {marqueeRect && (
+        <div
+          style={{
+            position: "absolute",
+            left: marqueeRect.x,
+            top: marqueeRect.y,
+            width: marqueeRect.width,
+            height: marqueeRect.height,
+            border: "1px dashed #58a6ff",
+            background: "rgba(88, 166, 255, 0.08)",
+            pointerEvents: "none",
+            zIndex: 20,
+          }}
+        />
+      )}
 
       {/* Mode indicator */}
       {toolMode === "draw" && (

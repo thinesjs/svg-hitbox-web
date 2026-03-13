@@ -132,6 +132,22 @@ export default function App() {
     );
   }, []);
 
+  const handleHitboxMultiUpdate = useCallback(
+    (patches: Array<{ id: string; patch: Partial<Hitbox> }>) => {
+      setHitboxes((prev) =>
+        prev.map((h) => {
+          const p = patches.find((p) => p.id === h.id);
+          return p ? { ...h, ...p.patch } as Hitbox : h;
+        })
+      );
+    },
+    []
+  );
+
+  const handleSetSelection = useCallback((ids: string[]) => {
+    setSelectedIds(ids);
+  }, []);
+
   const handleDeleteSelected = useCallback(() => {
     const ids = new Set(selectedIdsRef.current);
     const lockedInSelection = new Set(
@@ -439,12 +455,15 @@ export default function App() {
         <SvgCanvas
           svgData={svgData}
           hitboxes={hitboxes}
-          selectedId={selectedIds[0] ?? null}
+          selectedIds={selectedIds}
           toolMode={toolMode}
           drawShape={drawShape}
           onHitboxDrawn={handleHitboxDrawn}
           onHitboxUpdate={handleHitboxUpdate}
-          onHitboxClick={handleSelect}
+          onHitboxMultiUpdate={handleHitboxMultiUpdate}
+          onSelect={handleSelect}
+          onToggleSelect={handleToggleSelect}
+          onSetSelection={handleSetSelection}
           onDeselect={() => setSelectedIds([])}
         />
         {selectedHitbox && (
