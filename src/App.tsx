@@ -1,12 +1,15 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import type { SvgData, Hitbox, HitboxExport, ToolMode, DrawShape } from "./types";
 import SvgCanvas from "./SvgCanvas";
 import HitboxSidebar from "./HitboxSidebar";
 import HitboxEditor from "./HitboxEditor";
+import HitboxContextMenu from "./HitboxContextMenu";
 import { Button } from "@/components/ui/button";
 import {
   bringToFront, bringForward, sendBackward, sendToBack,
   flipHorizontal, flipVertical,
+  getHitboxAtPoint, selectionBounds,
 } from "./hitboxGeometry";
 
 function parseSvgViewBox(svgText: string): { x: number; y: number; width: number; height: number } {
@@ -48,6 +51,10 @@ export default function App() {
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [drawShape, setDrawShape] = useState<DrawShape>("rect");
   const [clipboard, setClipboard] = useState<Hitbox[]>([]);
+
+  // Ref for coordinate conversion from SvgCanvas (used by context menu)
+  const screenToSvgRef = useRef<((cx: number, cy: number) => { x: number; y: number }) | null>(null);
+  const [contextSvgPoint, setContextSvgPoint] = useState<{ x: number; y: number } | null>(null);
 
   // Refs for keyboard handler (avoid stale closures without extra deps)
   const hitboxesRef = useRef(hitboxes);
@@ -204,14 +211,16 @@ export default function App() {
   // --- Lock handlers ---
 
   const handleLock = useCallback(() => {
+    const ids = new Set(selectedIdsRef.current);
     setHitboxes((prev) =>
-      prev.map((h) => selectedIdsRef.current.includes(h.id) ? { ...h, locked: true } : h)
+      prev.map((h) => ids.has(h.id) ? { ...h, locked: true } : h)
     );
   }, []);
 
   const handleUnlock = useCallback(() => {
+    const ids = new Set(selectedIdsRef.current);
     setHitboxes((prev) =>
-      prev.map((h) => selectedIdsRef.current.includes(h.id) ? { ...h, locked: false } : h)
+      prev.map((h) => ids.has(h.id) ? { ...h, locked: false } : h)
     );
   }, []);
 
@@ -226,6 +235,80 @@ export default function App() {
     if (!svgData) return;
     setHitboxes((prev) => flipVertical(prev, selectedIdsRef.current, svgData.viewBox));
   }, [svgData]);
+
+  // --- Copy / Paste / Duplicate ---
+
+  const handleCopy = useCallback(() => {
+    const selected = hitboxesRef.current.filter((h) => selectedIdsRef.current.includes(h.id));
+    if (selected.length > 0) setClipboard(selected);
+  }, []);
+
+  const handlePaste = useCallback((cursorSvgPoint?: { x: number; y: number }) => {
+    const cb = clipboardRef.current;
+    if (cb.length === 0) return;
+
+    let newHbs: Hitbox[];
+    if (cursorSvgPoint) {
+      // Context menu paste: center clipboard group at cursor position
+      const bounds = selectionBounds(cb, cb.map((h) => h.id));
+      const cx = bounds.x + bounds.width / 2;
+      const cy = bounds.y + bounds.height / 2;
+      const offsetX = cursorSvgPoint.x - cx;
+      const offsetY = cursorSvgPoint.y - cy;
+      newHbs = cb.map((h) => {
+        const newId = crypto.randomUUID();
+        if (h.shape === "circle") {
+          return { ...h, id: newId, cx: h.cx + offsetX, cy: h.cy + offsetY, locked: false, fields: { ...h.fields } };
+        }
+        return { ...h, id: newId, x: h.x + offsetX, y: h.y + offsetY, locked: false, fields: { ...h.fields } };
+      });
+    } else {
+      // Keyboard paste: +20 offset from original positions
+      newHbs = cb.map((h) => {
+        const newId = crypto.randomUUID();
+        if (h.shape === "circle") {
+          return { ...h, id: newId, cx: h.cx + 20, cy: h.cy + 20, locked: false, fields: { ...h.fields } };
+        }
+        return { ...h, id: newId, x: h.x + 20, y: h.y + 20, locked: false, fields: { ...h.fields } };
+      });
+    }
+    setHitboxes((prev) => [...prev, ...newHbs]);
+    setSelectedIds(newHbs.map((h) => h.id));
+  }, []);
+
+  const handleDuplicate = useCallback(() => {
+    const ids = selectedIdsRef.current;
+    if (ids.length === 0) return;
+    const selected = hitboxesRef.current.filter((h) => ids.includes(h.id));
+    const dupes = selected.map((h) => {
+      const newId = crypto.randomUUID();
+      if (h.shape === "circle") {
+        return { ...h, id: newId, cx: h.cx + 20, cy: h.cy + 20, locked: false, fields: { ...h.fields } };
+      }
+      return { ...h, id: newId, x: h.x + 20, y: h.y + 20, locked: false, fields: { ...h.fields } };
+    });
+    setHitboxes((prev) => [...prev, ...dupes]);
+    setSelectedIds(dupes.map((h) => h.id));
+  }, []);
+
+  // --- Context menu target handler ---
+
+  const handleContextTarget = useCallback((e: React.MouseEvent) => {
+    if (!screenToSvgRef.current) return;
+    const svgPt = screenToSvgRef.current(e.clientX, e.clientY);
+    setContextSvgPoint(svgPt);
+    const hit = getHitboxAtPoint(svgPt.x, svgPt.y, hitboxesRef.current);
+    // flushSync ensures selection state is committed before Radix renders the menu portal
+    flushSync(() => {
+      if (hit) {
+        if (!selectedIdsRef.current.includes(hit.id)) {
+          setSelectedIds([hit.id]);
+        }
+      } else {
+        setSelectedIds([]);
+      }
+    });
+  }, []);
 
   // --- Import/Export ---
 
@@ -325,46 +408,25 @@ export default function App() {
       if (e.ctrlKey || e.metaKey) {
         // ⌘C / Ctrl+C — copy all selected hitboxes
         if (e.key.toLowerCase() === "c") {
-          const ids = selectedIdsRef.current;
-          if (ids.length === 0) return;
+          if (selectedIdsRef.current.length === 0) return;
           e.preventDefault();
-          const copied = hitboxesRef.current.filter((h) => ids.includes(h.id));
-          if (copied.length > 0) setClipboard(copied);
+          handleCopy();
           return;
         }
 
         // ⌘V / Ctrl+V — paste clipboard with +20 offset
         if (e.key.toLowerCase() === "v") {
-          const cb = clipboardRef.current;
-          if (cb.length === 0) return;
+          if (clipboardRef.current.length === 0) return;
           e.preventDefault();
-          const newHitboxes: Hitbox[] = cb.map((orig) => {
-            const newId = crypto.randomUUID();
-            if (orig.shape === "circle") {
-              return { ...orig, id: newId, cx: orig.cx + 20, cy: orig.cy + 20, fields: { ...orig.fields }, locked: false };
-            }
-            return { ...orig, id: newId, x: orig.x + 20, y: orig.y + 20, fields: { ...orig.fields }, locked: false };
-          });
-          setHitboxes((prev) => [...prev, ...newHitboxes]);
-          setSelectedIds(newHitboxes.map((h) => h.id));
+          handlePaste();
           return;
         }
 
         // ⌘D / Ctrl+D — duplicate selected
         if (e.key.toLowerCase() === "d") {
-          const ids = selectedIdsRef.current;
-          if (ids.length === 0) return;
+          if (selectedIdsRef.current.length === 0) return;
           e.preventDefault();
-          const toDuplicate = hitboxesRef.current.filter((h) => ids.includes(h.id));
-          const newHitboxes: Hitbox[] = toDuplicate.map((orig) => {
-            const newId = crypto.randomUUID();
-            if (orig.shape === "circle") {
-              return { ...orig, id: newId, cx: orig.cx + 20, cy: orig.cy + 20, fields: { ...orig.fields }, locked: false };
-            }
-            return { ...orig, id: newId, x: orig.x + 20, y: orig.y + 20, fields: { ...orig.fields }, locked: false };
-          });
-          setHitboxes((prev) => [...prev, ...newHitboxes]);
-          setSelectedIds(newHitboxes.map((h) => h.id));
+          handleDuplicate();
           return;
         }
 
@@ -413,7 +475,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toolMode, handleDeleteSelected]);
+  }, [toolMode, handleDeleteSelected, handleCopy, handlePaste, handleDuplicate]);
 
   // --- Render ---
 
@@ -452,30 +514,51 @@ export default function App() {
         onToolModeChange={setToolMode}
         onDrawShapeChange={setDrawShape}
       />
-      <div className="flex-1 relative overflow-hidden">
-        <SvgCanvas
-          svgData={svgData}
-          hitboxes={hitboxes}
-          selectedIds={selectedIds}
-          toolMode={toolMode}
-          drawShape={drawShape}
-          onHitboxDrawn={handleHitboxDrawn}
-          onHitboxUpdate={handleHitboxUpdate}
-          onHitboxMultiUpdate={handleHitboxMultiUpdate}
-          onSelect={handleSelect}
-          onToggleSelect={handleToggleSelect}
-          onSetSelection={handleSetSelection}
-          onDeselect={() => setSelectedIds([])}
-        />
-        {selectedHitbox && (
-          <HitboxEditor
-            hitbox={selectedHitbox}
-            onFieldsChange={handleFieldsChange}
-            onDelete={handleDeleteSingle}
-            onClose={() => setSelectedIds([])}
+      <HitboxContextMenu
+        selectedIds={selectedIds}
+        hitboxes={hitboxes}
+        clipboard={clipboard}
+        onCopy={handleCopy}
+        onPaste={handlePaste}
+        onDuplicate={handleDuplicate}
+        onDelete={handleDeleteSelected}
+        onBringToFront={handleBringToFront}
+        onBringForward={handleBringForward}
+        onSendBackward={handleSendBackward}
+        onSendToBack={handleSendToBack}
+        onLock={handleLock}
+        onUnlock={handleUnlock}
+        onFlipHorizontal={handleFlipHorizontal}
+        onFlipVertical={handleFlipVertical}
+        onContextTarget={handleContextTarget}
+        contextSvgPoint={contextSvgPoint}
+      >
+        <div className="flex-1 relative overflow-hidden">
+          <SvgCanvas
+            svgData={svgData}
+            hitboxes={hitboxes}
+            selectedIds={selectedIds}
+            toolMode={toolMode}
+            drawShape={drawShape}
+            onHitboxDrawn={handleHitboxDrawn}
+            onHitboxUpdate={handleHitboxUpdate}
+            onHitboxMultiUpdate={handleHitboxMultiUpdate}
+            onSelect={handleSelect}
+            onToggleSelect={handleToggleSelect}
+            onSetSelection={handleSetSelection}
+            onDeselect={() => setSelectedIds([])}
+            screenToSvgRef={screenToSvgRef}
           />
-        )}
-      </div>
+          {selectedHitbox && (
+            <HitboxEditor
+              hitbox={selectedHitbox}
+              onFieldsChange={handleFieldsChange}
+              onDelete={handleDeleteSingle}
+              onClose={() => setSelectedIds([])}
+            />
+          )}
+        </div>
+      </HitboxContextMenu>
     </div>
   );
 }
