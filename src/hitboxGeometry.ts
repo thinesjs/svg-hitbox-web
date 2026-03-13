@@ -1,4 +1,4 @@
-import type { Hitbox, RectHitbox, CircleHitbox, BBox, HandlePosition, HandleInfo } from "./types";
+import type { Hitbox, RectHitbox, CircleHitbox, BBox, HandlePosition, HandleInfo, ViewBox } from "./types";
 
 const MIN_SIZE = 5;
 
@@ -72,13 +72,6 @@ export function getHandleAtPoint(
 }
 
 // --- Clamping ---
-
-interface ViewBox {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 export function clampRectToViewBox(
   rx: number,
@@ -191,4 +184,117 @@ export function resizeCircle(
 
 export function hitboxLabel(h: Hitbox): string {
   return h.fields.stop || h.fields.route || h.fields.mode || h.id.slice(0, 8);
+}
+
+// --- Z-order operations ---
+
+export function bringToFront(hitboxes: Hitbox[], selectedIds: string[]): Hitbox[] {
+  const sel = new Set(selectedIds);
+  const unselected = hitboxes.filter((h) => !sel.has(h.id));
+  const selected = hitboxes.filter((h) => sel.has(h.id));
+  return [...unselected, ...selected];
+}
+
+export function sendToBack(hitboxes: Hitbox[], selectedIds: string[]): Hitbox[] {
+  const sel = new Set(selectedIds);
+  const unselected = hitboxes.filter((h) => !sel.has(h.id));
+  const selected = hitboxes.filter((h) => sel.has(h.id));
+  return [...selected, ...unselected];
+}
+
+export function bringForward(hitboxes: Hitbox[], selectedIds: string[]): Hitbox[] {
+  const sel = new Set(selectedIds);
+  const result = [...hitboxes];
+  for (let i = result.length - 2; i >= 0; i--) {
+    if (sel.has(result[i].id) && !sel.has(result[i + 1].id)) {
+      [result[i], result[i + 1]] = [result[i + 1], result[i]];
+    }
+  }
+  return result;
+}
+
+export function sendBackward(hitboxes: Hitbox[], selectedIds: string[]): Hitbox[] {
+  const sel = new Set(selectedIds);
+  const result = [...hitboxes];
+  for (let i = 1; i < result.length; i++) {
+    if (sel.has(result[i].id) && !sel.has(result[i - 1].id)) {
+      [result[i], result[i - 1]] = [result[i - 1], result[i]];
+    }
+  }
+  return result;
+}
+
+// --- Flip operations (multi-selection only) ---
+
+export function selectionBounds(hitboxes: Hitbox[], selectedIds: string[]): BBox {
+  const sel = new Set(selectedIds);
+  const selected = hitboxes.filter((h) => sel.has(h.id));
+  if (selected.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const h of selected) {
+    const b = hitboxBounds(h);
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.width);
+    maxY = Math.max(maxY, b.y + b.height);
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+export function flipHorizontal(hitboxes: Hitbox[], selectedIds: string[], vb: ViewBox): Hitbox[] {
+  const sel = new Set(selectedIds);
+  const bounds = selectionBounds(hitboxes, selectedIds);
+  const centerX = bounds.x + bounds.width / 2;
+  return hitboxes.map((h) => {
+    if (!sel.has(h.id) || h.locked) return h;
+    const hb = hitboxBounds(h);
+    const oldCenterX = hb.x + hb.width / 2;
+    const newCenterX = centerX + (centerX - oldCenterX);
+    if (h.shape === "circle") {
+      const clamped = clampCircleToViewBox(newCenterX, h.cy, h.r, vb);
+      return { ...h, cx: clamped.cx, cy: clamped.cy, r: clamped.r };
+    }
+    const newX = newCenterX - h.width / 2;
+    const clamped = clampRectToViewBox(newX, h.y, h.width, h.height, vb);
+    return { ...h, ...clamped };
+  });
+}
+
+export function flipVertical(hitboxes: Hitbox[], selectedIds: string[], vb: ViewBox): Hitbox[] {
+  const sel = new Set(selectedIds);
+  const bounds = selectionBounds(hitboxes, selectedIds);
+  const centerY = bounds.y + bounds.height / 2;
+  return hitboxes.map((h) => {
+    if (!sel.has(h.id) || h.locked) return h;
+    const hb = hitboxBounds(h);
+    const oldCenterY = hb.y + hb.height / 2;
+    const newCenterY = centerY + (centerY - oldCenterY);
+    if (h.shape === "circle") {
+      const clamped = clampCircleToViewBox(h.cx, newCenterY, h.r, vb);
+      return { ...h, cx: clamped.cx, cy: clamped.cy, r: clamped.r };
+    }
+    const newY = newCenterY - h.height / 2;
+    const clamped = clampRectToViewBox(h.x, newY, h.width, h.height, vb);
+    return { ...h, ...clamped };
+  });
+}
+
+// --- Marquee selection ---
+
+/** Returns IDs of hitboxes whose bounding box intersects the given rect (in SVG coords). */
+export function hitboxesInMarquee(
+  hitboxes: Hitbox[],
+  marquee: BBox
+): string[] {
+  return hitboxes
+    .filter((h) => {
+      const b = hitboxBounds(h);
+      return (
+        b.x < marquee.x + marquee.width &&
+        b.x + b.width > marquee.x &&
+        b.y < marquee.y + marquee.height &&
+        b.y + b.height > marquee.y
+      );
+    })
+    .map((h) => h.id);
 }

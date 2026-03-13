@@ -3,6 +3,7 @@
 export interface HitboxBase {
   id: string;
   fields: Record<string, string>;
+  locked?: boolean;
 }
 
 export interface RectHitbox extends HitboxBase {
@@ -27,21 +28,14 @@ export type Hitbox = RectHitbox | CircleHitbox;
 export type ToolMode = "select" | "draw";
 export type DrawShape = "rect" | "circle";
 
-// --- Export/Import ---
+// --- Geometry ---
 
-export interface HitboxExport {
-  svgFilename: string;
-  svgViewBox: string;
-  hitboxes: Hitbox[];
+export interface ViewBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
-
-export interface SvgData {
-  filename: string;
-  svgText: string;
-  viewBox: { x: number; y: number; width: number; height: number };
-}
-
-// --- Geometry helpers ---
 
 export interface BBox {
   x: number;
@@ -57,4 +51,18 @@ export interface HandleInfo {
   svgX: number;
   svgY: number;
   cursor: string;
+}
+
+// --- Export/Import ---
+
+export interface HitboxExport {
+  svgFilename: string;
+  svgViewBox: string;
+  hitboxes: Hitbox[];
+}
+
+export interface SvgData {
+  filename: string;
+  svgText: string;
+  viewBox: ViewBox;
 }
