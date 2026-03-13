@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { SvgData, Hitbox, ToolMode, DrawShape } from "./types";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +69,7 @@ export default function SvgCanvas({
   const { viewBox } = svgData;
   const { width: svgW, height: svgH } = viewBox;
   const scale = transform.scale;
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   // Expose screenToSvg to parent via ref (for context menu, Task 5)
   useEffect(() => {
@@ -165,7 +166,7 @@ export default function SvgCanvas({
       >
         {/* Hitbox shapes */}
         {hitboxes.map((hb) => {
-          const isSelected = selectedIds.includes(hb.id);
+          const isSelected = selectedSet.has(hb.id);
           const label = hitboxLabel(hb);
           return (
             <g key={hb.id}>

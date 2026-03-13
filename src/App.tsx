@@ -150,10 +150,11 @@ export default function App() {
 
   const handleHitboxMultiUpdate = useCallback(
     (patches: Array<{ id: string; patch: Partial<Hitbox> }>) => {
+      const patchMap = new Map(patches.map((p) => [p.id, p.patch]));
       setHitboxes((prev) =>
         prev.map((h) => {
-          const p = patches.find((p) => p.id === h.id);
-          return p ? { ...h, ...p.patch } as Hitbox : h;
+          const patch = patchMap.get(h.id);
+          return patch ? { ...h, ...patch } as Hitbox : h;
         })
       );
     },
@@ -163,6 +164,8 @@ export default function App() {
   const handleSetSelection = useCallback((ids: string[]) => {
     setSelectedIds(ids);
   }, []);
+
+  const handleDeselect = useCallback(() => setSelectedIds([]), []);
 
   const handleDeleteSelected = useCallback(() => {
     const ids = new Set(selectedIdsRef.current);
@@ -555,7 +558,7 @@ export default function App() {
             onSelect={handleSelect}
             onToggleSelect={handleToggleSelect}
             onSetSelection={handleSetSelection}
-            onDeselect={() => setSelectedIds([])}
+            onDeselect={handleDeselect}
             screenToSvgRef={screenToSvgRef}
           />
           {selectedHitbox && (
