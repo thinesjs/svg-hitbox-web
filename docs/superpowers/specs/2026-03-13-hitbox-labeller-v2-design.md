@@ -6,7 +6,7 @@ The current hitbox labeller can only create hitboxes — once drawn, they cannot
 
 ## Solution
 
-Add select/move/resize interactions (Photoshop-style) and migrate the UI to shadcn components with Tailwind CSS classes.
+Add select/move/resize interactions (Photoshop-style), support multiple shape types (rectangle and circle), and migrate the UI to shadcn components with Tailwind CSS classes.
 
 ## Tool Modes
 
@@ -22,21 +22,31 @@ Two modes, switchable via toolbar toggle or keyboard shortcuts:
 - **Click hitbox in sidebar** → selects it, opens panel
 
 ### Draw Mode (D)
-- **Click and drag on empty canvas** → draws new rectangle (dashed preview)
-- **Click and drag on a hitbox** → draws new rectangle (not pan, not move)
-- **Release** → creates hitbox if > 5 SVG units each side, selects it, opens panel, returns to Select mode
+- **Shape selector** in the toolbar chooses what shape to draw (Rectangle or Circle)
+- **Rectangle draw:** Click and drag → draws bounding box (dashed preview). Release creates hitbox if > 5 SVG units each side.
+- **Circle draw:** Click and drag → draws circle from center to mouse position (dashed preview). Radius = distance from click point to current mouse position. Release creates hitbox if radius > 5 SVG units.
+- **Click and drag on a hitbox** → draws new shape (not pan, not move)
+- **Release** → creates hitbox, selects it, opens panel, returns to Select mode
 - **Scroll wheel** → zooms (panning is not available via drag in draw mode; use scroll to zoom and reposition)
 
 ## Resize Handles
 
-8-handle model on selected hitbox:
+### Rectangle: 8-handle model
 - 4 corner handles (nw, ne, sw, se) — resize both dimensions
 - 4 edge midpoint handles (n, s, e, w) — resize one dimension
+- Cursor changes to appropriate resize cursor on hover (nwse-resize, nesw-resize, ns-resize, ew-resize)
+- Minimum hitbox size enforced: 5 SVG units each dimension
+
+### Circle: 4-handle model
+- 4 cardinal handles (n, s, e, w) positioned at the circle's edge
+- All 4 handles adjust the radius uniformly — dragging any handle changes `r`
+- Cursor: `ew-resize` for e/w handles, `ns-resize` for n/s handles
+- Minimum radius enforced: 5 SVG units
+
+### Common handle properties
 - Visual size: 10x10px screen size, white fill with 2px blue (`#3b82f6`) border
 - Hit area: 16x16px screen size (invisible, centered on the visual handle) — easier to grab
 - Both visual and hit area are scale-compensated (stay the same screen size regardless of zoom)
-- Cursor changes to appropriate resize cursor on hover (nwse-resize, nesw-resize, ns-resize, ew-resize)
-- Minimum hitbox size enforced: 5 SVG units each dimension
 
 ## Move Behavior
 
@@ -48,10 +58,16 @@ Two modes, switchable via toolbar toggle or keyboard shortcuts:
 
 ## Resize Boundary Constraints
 
-- Hitboxes are clamped to the SVG viewBox during resize — edges cannot extend beyond the viewBox
-- Minimum size enforced: 5 SVG units per dimension. If a resize would make a dimension smaller than 5 SVG units, clamp to 5.
-- When resizing via a corner handle, the opposite corner stays fixed
-- When resizing via an edge handle, the opposite edge stays fixed
+### Rectangle
+- Edges clamped to the SVG viewBox — cannot extend beyond
+- Minimum size enforced: 5 SVG units per dimension
+- Corner handle: opposite corner stays fixed
+- Edge handle: opposite edge stays fixed
+
+### Circle
+- Circle clamped to the SVG viewBox — center ± radius must stay within bounds
+- Minimum radius: 5 SVG units
+- All cardinal handles adjust radius uniformly (center stays fixed)
 
 ## Edit Hitbox Panel
 
@@ -60,7 +76,7 @@ Replaces the current bottom popover with a **floating panel** (a positioned `<di
 - Does NOT use shadcn `Dialog` — a Dialog is modal by default and would block pointer events on the canvas
 - Opens when a hitbox is selected (click on canvas or sidebar)
 - Stays open while moving/resizing — coordinates display updates live
-- Contains: hitbox ID (truncated), coordinates (x, y, width, height — read-only display), built-in fields (mode, route, stop), custom fields with add/remove
+- Contains: hitbox ID (truncated), shape type badge, coordinates (rect: x, y, width, height; circle: cx, cy, r — read-only display), built-in fields (mode, route, stop), custom fields with add/remove
 - Uses shadcn `Input`, `Label`, `Button` components for form elements
 - Panel has `pointer-events: auto` but does NOT cover the full viewport — canvas remains fully interactive
 
@@ -77,7 +93,7 @@ pnpm dlx shadcn@latest init -t vite --preset avp4rpa
 - `button` — Toolbar buttons, action buttons
 - `input` — Field values, search
 - `label` — Field labels
-- `toggle-group` — Mode switcher (Select/Draw)
+- `toggle-group` — Mode switcher (Select/Draw) and shape selector (Rectangle/Circle)
 - `tooltip` — Toolbar button hints
 - `scroll-area` — Sidebar hitbox list
 - `separator` — Visual dividers
@@ -95,6 +111,8 @@ pnpm dlx shadcn@latest init -t vite --preset avp4rpa
 |-----|--------|
 | `V` | Switch to Select mode (set, not toggle — pressing V while already in Select is a no-op) |
 | `D` | Switch to Draw mode (set, not toggle — pressing D while already in Draw is a no-op) |
+| `R` | Set draw shape to Rectangle (only relevant in Draw mode) |
+| `C` | Set draw shape to Circle (only relevant in Draw mode) |
 | `Delete` / `Backspace` | Delete selected hitbox |
 | `Escape` | If currently drawing (pointer down), cancel the in-progress rectangle and return to Select mode. If in Draw mode (idle), switch to Select mode. If in Select mode with a selection, deselect. |
 | `Scroll` | Zoom canvas |
@@ -105,18 +123,43 @@ pnpm dlx shadcn@latest init -t vite --preset avp4rpa
 
 ## Data Model
 
-No changes to the Hitbox interface — x, y, width, height are updated in-place during move/resize operations.
+**Breaking change:** The `Hitbox` interface is replaced with a discriminated union. Existing JSON exports (which only contain rectangles) are migrated on import by adding `shape: "rect"`.
 
 ```ts
 type ToolMode = "select" | "draw";
+type DrawShape = "rect" | "circle";
 
-interface Hitbox {
+interface HitboxBase {
   id: string;
-  x: number;       // updated during move
-  y: number;       // updated during move
+  fields: Record<string, string>;
+}
+
+interface RectHitbox extends HitboxBase {
+  shape: "rect";
+  x: number;       // top-left x, updated during move
+  y: number;       // top-left y, updated during move
   width: number;   // updated during resize
   height: number;  // updated during resize
-  fields: Record<string, string>;
+}
+
+interface CircleHitbox extends HitboxBase {
+  shape: "circle";
+  cx: number;      // center x, updated during move
+  cy: number;      // center y, updated during move
+  r: number;       // radius, updated during resize
+}
+
+type Hitbox = RectHitbox | CircleHitbox;
+```
+
+### Helper: bounding box
+
+For hit-testing, overlap detection, and sidebar display, a shared helper computes the bounding box of any hitbox:
+
+```ts
+function hitboxBounds(h: Hitbox): { x: number; y: number; width: number; height: number } {
+  if (h.shape === "circle") return { x: h.cx - h.r, y: h.cy - h.r, width: h.r * 2, height: h.r * 2 };
+  return { x: h.x, y: h.y, width: h.width, height: h.height };
 }
 ```
 
@@ -124,20 +167,19 @@ interface Hitbox {
 
 ```ts
 // New — called during move/resize drag to update hitbox geometry
-onHitboxUpdate: (id: string, rect: { x: number; y: number; width: number; height: number }) => void;
+onHitboxUpdate: (id: string, patch: Partial<RectHitbox> | Partial<CircleHitbox>) => void;
+
+// Changed — now passes the full hitbox (not just rect geometry)
+onHitboxDrawn: (hitbox: Hitbox) => void;
 
 // Existing — unchanged
-onHitboxDrawn: (rect: { x: number; y: number; width: number; height: number }) => void;
-onHitboxClick: (id: string) => void;  // renamed from onSelect for clarity
+onHitboxClick: (id: string) => void;
 onDeselect: () => void;
 ```
 
-App.tsx implements `onHitboxUpdate` as:
-```ts
-const handleHitboxUpdate = useCallback((id: string, rect: { x: number; y: number; width: number; height: number }) => {
-  setHitboxes(prev => prev.map(h => h.id === id ? { ...h, ...rect } : h));
-}, []);
-```
+### Import Migration
+
+When importing a JSON file without `shape` fields on hitboxes, add `shape: "rect"` to each entry. This maintains backward compatibility with v1 exports.
 
 ## File Changes
 
@@ -147,7 +189,7 @@ const handleHitboxUpdate = useCallback((id: string, rect: { x: number; y: number
 - `src/HitboxSidebar.tsx` — migrate to shadcn components (Button, Input, ScrollArea, ToggleGroup, Separator, Kbd)
 - `src/HitboxEditor.tsx` — rewrite as floating panel content using shadcn primitives (Input, Label, Button)
 - `src/index.css` — remove custom CSS variables, use Tailwind/shadcn theme
-- `src/types.ts` — add `ToolMode` type
+- `src/types.ts` — replace `Hitbox` with discriminated union (`RectHitbox | CircleHitbox`), add `ToolMode`, `DrawShape`, `hitboxBounds` helper
 
 ### New files:
 - `src/components/ui/*` — shadcn component files (generated by `pnpm dlx shadcn@latest add <component>`)
@@ -161,7 +203,7 @@ const handleHitboxUpdate = useCallback((id: string, rect: { x: number; y: number
 4. If pointer is on empty canvas → pan (on drag) / deselect (on click)
 
 ### Pointer Event Priority (Draw Mode)
-1. Any mousedown on canvas (empty or on hitbox) → begin drawing a new rectangle
+1. Any mousedown on canvas (empty or on hitbox) → begin drawing the selected shape (rect or circle)
 2. Scroll wheel → zoom
 
 ### Overlapping Hitboxes
