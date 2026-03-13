@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import type { SvgData, Hitbox, ToolMode, DrawShape } from "./types";
 import { generateJsonString, generateTsString } from "./codeGeneration";
+import CodePreviewDialog from "./CodePreviewDialog";
 import SvgCanvas from "./SvgCanvas";
 import HitboxSidebar from "./HitboxSidebar";
 import HitboxEditor from "./HitboxEditor";
@@ -64,6 +65,7 @@ export default function App() {
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [drawShape, setDrawShape] = useState<DrawShape>("rect");
   const [clipboard, setClipboard] = useState<Hitbox[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Ref for coordinate conversion from SvgCanvas (used by context menu)
   const screenToSvgRef = useRef<((cx: number, cy: number) => { x: number; y: number }) | null>(
@@ -504,6 +506,9 @@ export default function App() {
   const selectedHitbox =
     selectedIds.length === 1 ? (hitboxes.find((h) => h.id === selectedIds[0]) ?? null) : null;
 
+  const jsonCode = previewOpen && svgData ? generateJsonString(hitboxes, svgData) : "";
+  const tsCode = previewOpen && svgData ? generateTsString(hitboxes, svgData) : "";
+
   if (!svgData) {
     return (
       <div className="flex items-center justify-center h-screen flex-col gap-4">
@@ -534,6 +539,7 @@ export default function App() {
         onImport={handleImportJSON}
         onExportJSON={handleExportJSON}
         onExportTS={handleExportTS}
+        onPreview={() => setPreviewOpen(true)}
         onToolModeChange={setToolMode}
         onDrawShapeChange={setDrawShape}
       />
@@ -582,6 +588,12 @@ export default function App() {
           )}
         </div>
       </HitboxContextMenu>
+      <CodePreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        jsonCode={jsonCode}
+        tsCode={tsCode}
+      />
     </div>
   );
 }

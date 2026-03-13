@@ -22,6 +22,7 @@ interface HitboxSidebarProps {
   onImport: () => void;
   onExportJSON: () => void;
   onExportTS: () => void;
+  onPreview: () => void;
   onToolModeChange: (mode: ToolMode) => void;
   onDrawShapeChange: (shape: DrawShape) => void;
 }
@@ -39,6 +40,7 @@ export default function HitboxSidebar({
   onImport,
   onExportJSON,
   onExportTS,
+  onPreview,
   onToolModeChange,
   onDrawShapeChange,
 }: HitboxSidebarProps) {
@@ -262,6 +264,9 @@ export default function HitboxSidebar({
           </Button>
           <Button variant="outline" size="sm" className="w-full text-xs" onClick={onExportJSON}>
             Save (.json)
+          </Button>
+          <Button variant="outline" size="sm" className="w-full text-xs" onClick={onPreview}>
+            Preview
           </Button>
           <Button size="sm" className="w-full text-xs" onClick={onExportTS}>
             Export (.ts)
