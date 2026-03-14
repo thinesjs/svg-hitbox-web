@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import type { Hitbox, ToolMode, DrawShape } from "./types";
+import { RiArrowGoBackLine, RiArrowGoForwardLine } from "@remixicon/react";
 import { hitboxBounds, hitboxLabel } from "./hitboxGeometry";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,10 @@ interface HitboxSidebarProps {
   onExportJSON: () => void;
   onExportTS: () => void;
   onPreview: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   onToolModeChange: (mode: ToolMode) => void;
   onDrawShapeChange: (shape: DrawShape) => void;
 }
@@ -41,6 +46,10 @@ export default function HitboxSidebar({
   onExportJSON,
   onExportTS,
   onPreview,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   onToolModeChange,
   onDrawShapeChange,
 }: HitboxSidebarProps) {
@@ -62,7 +71,39 @@ export default function HitboxSidebar({
       <div className="w-[280px] bg-sidebar border-r border-border flex flex-col overflow-hidden shrink-0">
         {/* Header */}
         <div className="px-4 pt-4 pb-3">
-          <h1 className="text-base font-bold tracking-tight mb-1">SvgHitbox</h1>
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-base font-bold tracking-tight">SvgHitbox</h1>
+            <div className="flex gap-0.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    disabled={!canUndo}
+                    onClick={onUndo}
+                  >
+                    <RiArrowGoBackLine className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Undo (⌘Z)</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    disabled={!canRedo}
+                    onClick={onRedo}
+                  >
+                    <RiArrowGoForwardLine className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Redo (⌘⇧Z)</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
           <p className="text-xs text-muted-foreground">{svgFilename || "No SVG loaded"}</p>
         </div>
 

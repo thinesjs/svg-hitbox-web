@@ -598,6 +598,10 @@ export default function App() {
         onExportJSON={handleExportJSON}
         onExportTS={handleExportTS}
         onPreview={handlePreview}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
         onToolModeChange={setToolMode}
         onDrawShapeChange={setDrawShape}
       />
