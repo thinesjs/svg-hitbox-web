@@ -623,6 +623,10 @@ export default function App() {
         onFlipVertical={handleFlipVertical}
         onContextTarget={handleContextTarget}
         contextSvgPoint={contextSvgPoint}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
       >
         <div className="flex-1 relative overflow-hidden">
           <SvgCanvas

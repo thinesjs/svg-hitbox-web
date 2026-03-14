@@ -28,6 +28,10 @@ interface HitboxContextMenuProps {
   onFlipVertical: () => void;
   onContextTarget: (e: React.MouseEvent) => void;
   contextSvgPoint: { x: number; y: number } | null;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 export default function HitboxContextMenu({
@@ -49,6 +53,10 @@ export default function HitboxContextMenu({
   onFlipVertical,
   onContextTarget,
   contextSvgPoint,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: HitboxContextMenuProps) {
   const selectedHitboxes = hitboxes.filter((h) => selectedIds.includes(h.id));
   const hasSelection = selectedIds.length > 0;
@@ -63,6 +71,13 @@ export default function HitboxContextMenu({
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-52">
+        <ContextMenuItem onSelect={onUndo} disabled={!canUndo}>
+          Undo<ContextMenuShortcut>⌘Z</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onRedo} disabled={!canRedo}>
+          Redo<ContextMenuShortcut>⌘⇧Z</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         {hasSelection && (
           <ContextMenuItem onSelect={onCopy}>
             Copy<ContextMenuShortcut>⌘C</ContextMenuShortcut>
