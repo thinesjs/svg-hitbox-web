@@ -63,6 +63,8 @@ interface UseCanvasInteractionsProps {
   onToggleSelect: (id: string) => void;
   onSetSelection: (ids: string[]) => void;
   onDeselect: () => void;
+  onBeginBatch: () => void;
+  onCommitBatch: () => void;
 }
 
 interface UseCanvasInteractionsReturn {
@@ -98,6 +100,8 @@ export function useCanvasInteractions({
   onToggleSelect,
   onSetSelection,
   onDeselect,
+  onBeginBatch,
+  onCommitBatch,
 }: UseCanvasInteractionsProps): UseCanvasInteractionsReturn {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
@@ -287,6 +291,7 @@ export function useCanvasInteractions({
               original: singleSelected,
             };
             setCursor(handle.cursor);
+            onBeginBatch();
             return;
           }
         }
@@ -313,6 +318,7 @@ export function useCanvasInteractions({
               pointerStart: { x: e.clientX, y: e.clientY },
             };
             setCursor("move");
+            onBeginBatch();
             return;
           }
 
@@ -337,6 +343,7 @@ export function useCanvasInteractions({
               pointerStart: { x: e.clientX, y: e.clientY },
             };
             setCursor("copy");
+            onBeginBatch();
             return;
           }
 
@@ -358,6 +365,7 @@ export function useCanvasInteractions({
               pointerStart: { x: e.clientX, y: e.clientY },
             };
             setCursor("move");
+            onBeginBatch();
             return;
           }
 
@@ -373,6 +381,7 @@ export function useCanvasInteractions({
               pointerStart: { x: e.clientX, y: e.clientY },
             };
             setCursor("move");
+            onBeginBatch();
           }
           return;
         }
@@ -389,7 +398,7 @@ export function useCanvasInteractions({
         return;
       }
     },
-    [toolMode, drawShape, screenToSvg, onSelect, onSetSelection, onHitboxDrawn],
+    [toolMode, drawShape, screenToSvg, onSelect, onSetSelection, onHitboxDrawn, onBeginBatch],
   );
 
   const handlePointerMove = useCallback(
@@ -608,12 +617,17 @@ export function useCanvasInteractions({
         setCursor(spaceHeldRef.current ? "grab" : "default");
       }
 
+      // Commit batch for move/resize (single undo entry for entire drag)
+      if (state.type === "moving" || state.type === "resizing") {
+        onCommitBatch();
+      }
+
       interactionRef.current = { type: "idle" };
       if (state.type !== "panning") {
         setCursor(toolMode === "draw" ? "crosshair" : spaceHeldRef.current ? "grab" : "default");
       }
     },
-    [toolMode, screenToSvg, onHitboxDrawn, onToggleSelect, onDeselect],
+    [toolMode, screenToSvg, onHitboxDrawn, onToggleSelect, onDeselect, onCommitBatch],
   );
 
   return {

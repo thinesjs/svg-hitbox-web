@@ -635,6 +635,8 @@ export default function App() {
             onSetSelection={handleSetSelection}
             onDeselect={handleDeselect}
             screenToSvgRef={screenToSvgRef}
+            onBeginBatch={beginBatch}
+            onCommitBatch={commitBatch}
           />
           {selectedHitbox && (
             <HitboxEditor

@@ -17,6 +17,8 @@ interface SvgCanvasProps {
   onToggleSelect: (id: string) => void;
   onSetSelection: (ids: string[]) => void;
   onDeselect: () => void;
+  onBeginBatch: () => void;
+  onCommitBatch: () => void;
   screenToSvgRef?: React.MutableRefObject<
     ((cx: number, cy: number) => { x: number; y: number }) | null
   >;
@@ -35,6 +37,8 @@ export default function SvgCanvas({
   onToggleSelect,
   onSetSelection,
   onDeselect,
+  onBeginBatch,
+  onCommitBatch,
   screenToSvgRef,
 }: SvgCanvasProps) {
   const {
@@ -61,6 +65,8 @@ export default function SvgCanvas({
     onToggleSelect,
     onSetSelection,
     onDeselect,
+    onBeginBatch,
+    onCommitBatch,
   });
 
   const { viewBox } = svgData;
