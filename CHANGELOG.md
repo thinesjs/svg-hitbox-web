@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.5.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.4.2...v1.5.0) (2026-03-14)
+
+
+### Features
+
+* add feed field and typed HitboxFields in TS export ([2cfc4fd](https://github.com/thinesjs/svg-hitbox-web/commit/2cfc4fdea0a412c793a0d555ae369ca0be3df453))
+
 ## [1.4.2](https://github.com/thinesjs/svg-hitbox-web/compare/v1.4.1...v1.4.2) (2026-03-14)
 
 
