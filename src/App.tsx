@@ -8,6 +8,7 @@ import HitboxSidebar from "./HitboxSidebar";
 import HitboxEditor from "./HitboxEditor";
 import HitboxContextMenu from "./HitboxContextMenu";
 import { Button } from "@/components/ui/button";
+import { useHistory } from "./useHistory";
 import {
   bringToFront,
   bringForward,
@@ -60,7 +61,17 @@ function migrateHitbox(h: unknown): Hitbox | null {
 
 export default function App() {
   const [svgData, setSvgData] = useState<SvgData | null>(null);
-  const [hitboxes, setHitboxes] = useState<Hitbox[]>([]);
+  const {
+    state: hitboxes,
+    setState: setHitboxes,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    resetHistory,
+    beginBatch,
+    commitBatch,
+  } = useHistory<Hitbox[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [toolMode, setToolMode] = useState<ToolMode>("select");
   const [drawShape, setDrawShape] = useState<DrawShape>("rect");
@@ -83,6 +94,14 @@ export default function App() {
   const selectedIdsRef = useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
 
+  const handleUndo = useCallback(() => {
+    undo();
+  }, [undo]);
+
+  const handleRedo = useCallback(() => {
+    redo();
+  }, [redo]);
+
   // Load persisted state from localStorage on mount
   useEffect(() => {
     try {
@@ -94,7 +113,7 @@ export default function App() {
         const migrated = data.hitboxes
           .map(migrateHitbox)
           .filter((h: Hitbox | null): h is Hitbox => h !== null);
-        setHitboxes(migrated);
+        resetHistory(migrated);
       }
     } catch {
       // Ignore corrupt data
@@ -113,6 +132,15 @@ export default function App() {
     }, 300);
     return () => clearTimeout(timeout);
   }, [svgData, hitboxes]);
+
+  // Prune selectedIds when hitboxes change (e.g., after undo removes a hitbox)
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const ids = new Set(hitboxes.map((h) => h.id));
+      const pruned = prev.filter((id) => ids.has(id));
+      return pruned.length === prev.length ? prev : pruned;
+    });
+  }, [hitboxes]);
 
   // Disable browser zoom (Ctrl+scroll, Ctrl+plus/minus, pinch)
   useEffect(() => {
@@ -144,7 +172,7 @@ export default function App() {
       if (!file) return;
       const text = await file.text();
       setSvgData({ filename: file.name, svgText: text, viewBox: parseSvgViewBox(text) });
-      setHitboxes([]);
+      resetHistory([]);
       setSelectedIds([]);
       setToolMode("select");
     };
@@ -404,7 +432,7 @@ export default function App() {
           );
           if (!proceed) return;
         }
-        setHitboxes(migrated as Hitbox[]);
+        resetHistory(migrated as Hitbox[]);
         setSelectedIds([]);
       } catch {
         alert("Invalid JSON file");
@@ -432,6 +460,20 @@ export default function App() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       if (e.ctrlKey || e.metaKey) {
+        // ⌘⇧Z / Ctrl+Shift+Z — redo (check BEFORE bare z)
+        if (e.shiftKey && e.key.toLowerCase() === "z") {
+          e.preventDefault();
+          handleRedo();
+          return;
+        }
+
+        // ⌘Z / Ctrl+Z — undo
+        if (e.key.toLowerCase() === "z") {
+          e.preventDefault();
+          handleUndo();
+          return;
+        }
+
         // ⌘C / Ctrl+C — copy all selected hitboxes
         if (e.key.toLowerCase() === "c") {
           if (selectedIdsRef.current.length === 0) return;
@@ -501,7 +543,15 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [toolMode, handleDeleteSelected, handleCopy, handlePaste, handleDuplicate]);
+  }, [
+    toolMode,
+    handleDeleteSelected,
+    handleCopy,
+    handlePaste,
+    handleDuplicate,
+    handleUndo,
+    handleRedo,
+  ]);
 
   // --- Render ---
 
