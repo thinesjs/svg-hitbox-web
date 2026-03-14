@@ -90,7 +90,7 @@ export default function CodePreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-full max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-3xl w-full max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Code Preview</DialogTitle>
         </DialogHeader>

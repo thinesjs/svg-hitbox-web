@@ -195,7 +195,7 @@ export default function HitboxSidebar({
         </div>
 
         {/* Hitbox list */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="py-1">
             {filtered.map((hb) => {
               const label = hitboxLabel(hb);
@@ -252,7 +252,7 @@ export default function HitboxSidebar({
         <Separator />
 
         {/* Keyboard hints */}
-        <div className="px-4 py-2 flex flex-col gap-1.5 text-[11px] text-muted-foreground">
+        <div className="px-4 py-2 flex flex-col gap-1.5 text-[11px] text-muted-foreground shrink-0">
           <div className="flex gap-2">
             <span>
               <Kbd>V</Kbd> Select
@@ -299,7 +299,7 @@ export default function HitboxSidebar({
         </div>
 
         {/* Import/Export */}
-        <div className="p-3 border-t border-border flex flex-col gap-1.5">
+        <div className="p-3 border-t border-border flex flex-col gap-1.5 shrink-0">
           <Button variant="outline" size="sm" className="w-full text-xs" onClick={onImport}>
             Import (.json)
           </Button>
