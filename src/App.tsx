@@ -6,6 +6,7 @@ import CodePreviewDialog from "./CodePreviewDialog";
 import SvgCanvas from "./SvgCanvas";
 import HitboxSidebar from "./HitboxSidebar";
 import HitboxEditor from "./HitboxEditor";
+import BulkFieldEditor from "./BulkFieldEditor";
 import HitboxContextMenu from "./HitboxContextMenu";
 import { Button } from "@/components/ui/button";
 import { useHistory } from "./useHistory";
@@ -226,6 +227,13 @@ export default function App() {
 
   const handleFieldsChange = useCallback((id: string, fields: Record<string, string>) => {
     setHitboxes((prev) => prev.map((h) => (h.id === id ? { ...h, fields } : h)));
+  }, []);
+
+  const handleBulkFieldChange = useCallback((ids: string[], key: string, value: string) => {
+    const idSet = new Set(ids);
+    setHitboxes((prev) =>
+      prev.map((h) => (idSet.has(h.id) ? { ...h, fields: { ...h.fields, [key]: value } } : h)),
+    );
   }, []);
 
   const handleSelect = useCallback((id: string) => {
@@ -651,6 +659,14 @@ export default function App() {
               hitbox={selectedHitbox}
               onFieldsChange={handleFieldsChange}
               onDelete={handleDeleteSingle}
+              onClose={() => setSelectedIds([])}
+            />
+          )}
+          {selectedIds.length > 1 && (
+            <BulkFieldEditor
+              hitboxes={hitboxes}
+              selectedIds={selectedIds}
+              onBulkFieldChange={handleBulkFieldChange}
               onClose={() => setSelectedIds([])}
             />
           )}
