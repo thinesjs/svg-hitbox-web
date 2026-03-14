@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.4.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.3.0...v1.4.0) (2026-03-14)
+
+
+### Features
+
+* add batch callbacks to prevent drag/resize flooding undo stack ([25b4f06](https://github.com/thinesjs/svg-hitbox-web/commit/25b4f0647d517742ae8c8b3cc60e966ec0fc29ab))
+* add undo/redo buttons to sidebar header ([7c30664](https://github.com/thinesjs/svg-hitbox-web/commit/7c306649f63d19465b07d07c2493e0fffa1a6c38))
+* add undo/redo items to context menu ([1cbb722](https://github.com/thinesjs/svg-hitbox-web/commit/1cbb72263065ed870ae6d166c5d27382a4cb335a))
+* add useHistory hook with undo/redo stacks and batch API ([ba9dcc4](https://github.com/thinesjs/svg-hitbox-web/commit/ba9dcc4ccbe52833488f4d669f041ceb1d47dd79))
+* wire useHistory into App with undo/redo keyboard shortcuts ([1f3085e](https://github.com/thinesjs/svg-hitbox-web/commit/1f3085e314a3494120ddaf3b9c855320a0e61f06))
+
 ## [1.3.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.2.0...v1.3.0) (2026-03-14)
 
 
