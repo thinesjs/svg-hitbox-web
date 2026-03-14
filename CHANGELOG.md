@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.3.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.2.0...v1.3.0) (2026-03-14)
+
+
+### Features
+
+* add CodePreviewDialog component with Shiki highlighting ([d9284e6](https://github.com/thinesjs/svg-hitbox-web/commit/d9284e6c83fd501b58ce3fe90a3485f48fdcd694))
+* wire up code preview dialog with sidebar trigger ([62e1304](https://github.com/thinesjs/svg-hitbox-web/commit/62e13045a1d38ac47faf00d68fdef59ad936a78b))
+
 ## [1.2.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.1.0...v1.2.0) (2026-03-13)
 
 
