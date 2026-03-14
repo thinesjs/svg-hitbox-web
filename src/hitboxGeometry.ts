@@ -186,7 +186,14 @@ export function resizeCircle(
 // --- Label helper ---
 
 export function hitboxLabel(h: Hitbox): string {
-  return h.fields.name || h.fields.stop || h.fields.route || h.fields.feed || h.fields.mode || h.id.slice(0, 8);
+  return (
+    h.fields.name ||
+    h.fields.stop ||
+    h.fields.route ||
+    h.fields.feed ||
+    h.fields.mode ||
+    h.id.slice(0, 8)
+  );
 }
 
 // --- Z-order operations ---
