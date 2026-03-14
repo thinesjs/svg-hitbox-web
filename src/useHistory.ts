@@ -29,33 +29,30 @@ export function useHistory<T>(
   const [, forceRender] = useState(0);
   const triggerRender = useCallback(() => forceRender((n) => n + 1), []);
 
-  const setState = useCallback(
+  const setStateImpl = useCallback(
     (valueOrUpdater: T | ((prev: T) => T)) => {
-      setCurrent((prev) => {
-        const next =
-          typeof valueOrUpdater === "function"
-            ? (valueOrUpdater as (prev: T) => T)(prev)
-            : valueOrUpdater;
-
-        // If batching, don't push to undo stack
-        if (batchRef.current !== null) {
-          return next;
-        }
-
-        // Push previous state to undo stack
-        undoStackRef.current = [...undoStackRef.current, prev];
-        if (undoStackRef.current.length > maxEntries) {
-          undoStackRef.current = undoStackRef.current.slice(
-            undoStackRef.current.length - maxEntries,
-          );
-        }
-        // Clear redo stack on new action
-        redoStackRef.current = [];
-        triggerRender();
-        return next;
-      });
+      if (batchRef.current !== null) {
+        setCurrent(valueOrUpdater);
+        return;
+      }
+      const prev = currentRef.current;
+      undoStackRef.current = [...undoStackRef.current, prev];
+      if (undoStackRef.current.length > maxEntries) {
+        undoStackRef.current = undoStackRef.current.slice(undoStackRef.current.length - maxEntries);
+      }
+      redoStackRef.current = [];
+      setCurrent(valueOrUpdater);
+      triggerRender();
     },
     [maxEntries, triggerRender],
+  );
+
+  // Stable ref wrapper so consumers don't need setState in their dep arrays
+  const setStateRef = useRef(setStateImpl);
+  setStateRef.current = setStateImpl;
+  const stableSetState = useCallback(
+    (valueOrUpdater: T | ((prev: T) => T)) => setStateRef.current(valueOrUpdater),
+    [],
   );
 
   const undo = useCallback(() => {
@@ -78,7 +75,7 @@ export function useHistory<T>(
     triggerRender();
   }, [triggerRender]);
 
-  const resetHistory = useCallback(
+  const resetHistoryImpl = useCallback(
     (newState?: T) => {
       undoStackRef.current = [];
       redoStackRef.current = [];
@@ -91,13 +88,17 @@ export function useHistory<T>(
     [triggerRender],
   );
 
+  // Stable ref wrapper for resetHistory
+  const resetHistoryRef = useRef(resetHistoryImpl);
+  resetHistoryRef.current = resetHistoryImpl;
+  const stableResetHistory = useCallback((newState?: T) => resetHistoryRef.current(newState), []);
+
   const beginBatch = useCallback(() => {
     batchRef.current = currentRef.current;
   }, []);
 
   const commitBatch = useCallback(() => {
     if (batchRef.current === null) return;
-    // Push the pre-batch state as a single undo entry
     undoStackRef.current = [...undoStackRef.current, batchRef.current];
     if (undoStackRef.current.length > maxEntries) {
       undoStackRef.current = undoStackRef.current.slice(undoStackRef.current.length - maxEntries);
@@ -109,12 +110,12 @@ export function useHistory<T>(
 
   return {
     state: current,
-    setState,
+    setState: stableSetState,
     undo,
     redo,
     canUndo: undoStackRef.current.length > 0,
     canRedo: redoStackRef.current.length > 0,
-    resetHistory,
+    resetHistory: stableResetHistory,
     beginBatch,
     commitBatch,
   };
