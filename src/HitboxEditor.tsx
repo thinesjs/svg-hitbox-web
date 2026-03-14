@@ -12,7 +12,7 @@ interface HitboxEditorProps {
   onClose: () => void;
 }
 
-const BUILTIN_KEYS = ["mode", "feed", "route", "stop"];
+const BUILTIN_KEYS = ["mode", "feed", "route", "stop", "name"];
 
 export default function HitboxEditor({
   hitbox,

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
-const BUILTIN_KEYS = ["mode", "feed", "route", "stop"];
+const BUILTIN_KEYS = ["mode", "feed", "route", "stop", "name"];
 
 interface BulkFieldEditorProps {
   hitboxes: Hitbox[];

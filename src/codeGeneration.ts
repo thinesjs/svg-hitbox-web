@@ -25,6 +25,7 @@ export function generateTsString(hitboxes: Hitbox[], svgData: SvgData): string {
   lines.push("  feed: string;");
   lines.push("  route: string;");
   lines.push("  stop: string;");
+  lines.push("  name: string;");
   lines.push("}");
   lines.push("");
   lines.push("export interface HitboxBase {");
