@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.7.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.6.0...v1.7.0) (2026-03-14)
+
+
+### Features
+
+* add name field for stop display name (tooltip) ([3d9f2a2](https://github.com/thinesjs/svg-hitbox-web/commit/3d9f2a23fe0c5a1ae443baed7c6a1c203f76b4c4))
+
 ## [1.6.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.5.0...v1.6.0) (2026-03-14)
 
 
