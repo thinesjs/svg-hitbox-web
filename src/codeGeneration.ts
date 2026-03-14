@@ -20,9 +20,16 @@ export function generateJsonString(hitboxes: Hitbox[], svgData: SvgData): string
 
 export function generateTsString(hitboxes: Hitbox[], svgData: SvgData): string {
   const lines: string[] = [];
+  lines.push("export interface HitboxFields {");
+  lines.push("  mode: 'rail' | 'bus';");
+  lines.push("  feed: string;");
+  lines.push("  route: string;");
+  lines.push("  stop: string;");
+  lines.push("}");
+  lines.push("");
   lines.push("export interface HitboxBase {");
   lines.push("  id: string;");
-  lines.push("  fields: Record<string, string>;");
+  lines.push("  fields: HitboxFields;");
   lines.push("}");
   lines.push("");
   lines.push("export interface RectHitbox extends HitboxBase {");
