@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
@@ -108,7 +107,7 @@ export default function CodePreviewDialog({
           </Button>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 rounded-md border">
+        <div className="flex-1 min-h-0 overflow-auto rounded-md border">
           {highlightedHtml ? (
             <div
               className="text-sm [&_pre]:p-4 [&_pre]:m-0 [&_pre]:bg-transparent"
@@ -119,7 +118,7 @@ export default function CodePreviewDialog({
               <code>{rawCode}</code>
             </pre>
           )}
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
