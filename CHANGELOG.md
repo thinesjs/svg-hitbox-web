@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.4.2](https://github.com/thinesjs/svg-hitbox-web/compare/v1.4.1...v1.4.2) (2026-03-14)
+
+
+### Bug Fixes
+
+* replace ScrollArea with overflow-auto div in code preview dialog ([3025ada](https://github.com/thinesjs/svg-hitbox-web/commit/3025adaaf5223a9545fde20ca9d89a210f2fdf7e))
+
 ## [1.4.1](https://github.com/thinesjs/svg-hitbox-web/compare/v1.4.0...v1.4.1) (2026-03-14)
 
 
