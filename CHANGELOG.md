@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.4.1](https://github.com/thinesjs/svg-hitbox-web/compare/v1.4.0...v1.4.1) (2026-03-14)
+
+
+### Bug Fixes
+
+* sidebar hitbox list and code preview dialog overflow ([7074d98](https://github.com/thinesjs/svg-hitbox-web/commit/7074d988ade7b86e5103731885724df77b006fc1))
+
 ## [1.4.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.3.0...v1.4.0) (2026-03-14)
 
 
