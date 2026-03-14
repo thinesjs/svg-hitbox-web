@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.6.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.5.0...v1.6.0) (2026-03-14)
+
+
+### Features
+
+* add bulk field editor for multi-selection ([135f78f](https://github.com/thinesjs/svg-hitbox-web/commit/135f78fc13130f3d1c8e722fea673ef55909d39e))
+
 ## [1.5.0](https://github.com/thinesjs/svg-hitbox-web/compare/v1.4.2...v1.5.0) (2026-03-14)
 
 
